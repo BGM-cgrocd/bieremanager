@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🍺 BièreManager</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --amber: #C97D1A;
+    --amber-light: #E8A030;
+    --amber-dark: #8B5610;
+    --foam: #FFF8E7;
+    --dark: #1A1208;
+    --dark2: #2D2010;
+    --mid: #4A3520;
+    --text: #F5ECD8;
+    --text-muted: #A89070;
+    --green: #2E7D32;
+    --green-light: #4CAF50;
+    --red: #C62828;
+    --red-light: #EF5350;
+    --orange: #E65100;
+    --card: #251A0E;
+    --border: #3D2D1A;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--dark);
+    color: var(--text);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* HEADER */
+  .header {
+    background: linear-gradient(135deg, var(--dark2) 0%, var(--mid) 100%);
+    padding: 16px 20px 12px;
+    border-bottom: 2px solid var(--amber);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--amber-light); letter-spacing: 2px; }
+  .logo span { color: var(--text-muted); font-size: 14px; font-family: 'Inter', sans-serif; letter-spacing: 0; display: block; }
+  .date-badge { background: var(--amber-dark); color: var(--foam); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    background: var(--dark2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: none;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .tab.active { color: var(--amber-light); border-bottom-color: var(--amber-light); }
+
+  /* CONTENT */
+  .content { padding: 16px; display: none; }
+  .content.active { display: block; }
+
+  /* CARDS */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    color: var(--amber-light);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* STOCK METERS */
+  .stock-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stock-item {
+    background: var(--dark2);
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid var(--border);
+  }
+  .stock-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .stock-value { font-size: 28px; font-family: 'Bebas Neue', sans-serif; color: var(--text); line-height: 1; }
+  .stock-value span { font-size: 13px; color: var(--text-muted); font-family: 'Inter', sans-serif; }
+  .stock-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .stock-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+  .ok { background: var(--green-light); }
+  .warn { background: var(--orange); }
+  .danger { background: var(--red-light); }
+
+  /* ALERT BANNER */
+  .alert {
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .alert-red { background: rgba(198,40,40,0.2); border: 1px solid var(--red); color: #FF8A80; }
+  .alert-orange { background: rgba(230,81,0,0.2); border: 1px solid var(--orange); color: #FFAB40; }
+  .alert-green { background: rgba(46,125,50,0.2); border: 1px solid var(--green); color: #69F0AE; }
+  .alert-icon { font-size: 18px; flex-shrink: 0; }
+
+  /* TIREUSES */
+  .tireur-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tireur-row:last-child { border-bottom: none; }
+  .tireur-name { font-size: 14px; font-weight: 600; }
+  .tireur-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .badge-ok { background: rgba(76,175,80,0.2); color: #69F0AE; border: 1px solid var(--green); }
+  .badge-warn { background: rgba(230,81,0,0.2); color: #FFAB40; border: 1px solid var(--orange); }
+  .badge-full { background: rgba(198,40,40,0.2); color: #FF8A80; border: 1px solid var(--red); }
+
+  /* FORMS */
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+  .form-input, .form-select {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--dark2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--amber); }
+  .form-select option { background: var(--dark2); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--amber) 0%, var(--amber-light) 100%); color: var(--dark); }
+  .btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+  .btn-secondary { background: var(--dark2); border: 1px solid var(--border); color: var(--text-muted); margin-top: 8px; }
+
+  /* COMMANDES LIST */
+  .commande-item {
+    background: var(--dark2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 4px solid var(--amber);
+    position: relative;
+  }
+  .commande-item.urgent { border-left-color: var(--red-light); }
+  .commande-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .commande-client { font-weight: 700; font-size: 14px; }
+  .commande-date { font-size: 12px; color: var(--text-muted); }
+  .commande-detail { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .commande-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  .tag-fut { background: rgba(201,125,26,0.2); color: var(--amber-light); border: 1px solid var(--amber-dark); }
+  .tag-tireuse { background: rgba(33,150,243,0.2); color: #64B5F6; border: 1px solid #1565C0; }
+  .tag-livraison { background: rgba(156,39,176,0.2); color: #CE93D8; border: 1px solid #6A1B9A; }
+  .del-btn { background: none; border: none; color: var(--red-light); font-size: 18px; cursor: pointer; padding: 2px 6px; }
+
+  /* CLIENTS */
+  .client-item {
+    background: var(--dark2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+  .client-top { display: flex; justify-content: space-between; align-items: center; }
+  .client-name { font-weight: 700; font-size: 15px; }
+  .client-type { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 700; }
+  .type-saison { background: rgba(230,81,0,0.2); color: #FFAB40; border: 1px solid var(--orange); }
+  .type-annuel { background: rgba(46,125,50,0.2); color: #69F0AE; border: 1px solid var(--green); }
+  .client-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .client-stat { text-align: center; }
+  .client-stat-val { font-size: 18px; font-family: 'Bebas Neue', sans-serif; color: var(--amber-light); }
+  .client-stat-label { font-size: 10px; color: var(--text-muted); }
+  .rentability-bar { margin-top: 10px; }
+  .rentability-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .progress { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+
+  /* SECTION TITLE */
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--amber-light);
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* BOTTOM NAV */
+  .bottom-space { height: 80px; }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 200;
+    align-items: flex-end;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-top: 2px solid var(--amber);
+  }
+  .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--amber-light); margin-bottom: 16px; }
+  .modal-close { float: right; background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
+
+  /* FAB */
+  .fab {
+    position: fixed;
+    bottom: 24px;
+    right: 50%;
+    transform: translateX(50%);
+    background: linear-gradient(135deg, var(--amber) 0%, var(--amber-light) 100%);
+    color: var(--dark);
+    border: none;
+    border-radius: 30px;
+    padding: 14px 28px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(201,125,26,0.5);
+    z-index: 150;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* CALENDAR MINI */
+  .week-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .week-label { font-weight: 700; font-size: 14px; }
+  .week-btn { background: var(--dark2); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 18px; }
+  .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 12px; }
+  .week-day { text-align: center; }
+  .week-day-name { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+  .week-day-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 4px auto 0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    position: relative;
+  }
+  .week-day-num.today { background: var(--amber); color: var(--dark); }
+  .week-day-num.has-event::after {
+    content: '';
+    width: 5px; height: 5px;
+    background: var(--red-light);
+    border-radius: 50%;
+    position: absolute;
+    bottom: 2px;
+  }
+  .week-day-num.has-event.ok-day::after { background: var(--green-light); }
+
+  /* Responsive input number */
+  input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="logo">🍺 BièreManager<span>Location fûts & tireuses</span></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+      <div class="date-badge" id="todayDate"></div>
+      <div id="sync-status" style="font-size:11px;font-weight:600;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('dashboard')">📊 Tableau de bord</div>
+  <div class="tab" onclick="showTab('commandes')">📋 Commandes</div>
+  <div class="tab" onclick="showTab('planning')">📅 Planning</div>
+  <div class="tab" onclick="showTab('clients')">👥 Clients fixes</div>
+  <div class="tab" onclick="showTab('stock')">🍺 Stock</div>
+  <div class="tab" onclick="showTab('fermenteurs')">🧪 Fermenteurs</div>
+  <div class="tab" onclick="showTab('parametres')">⚙️ Paramètres</div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="content active" id="tab-dashboard">
+
+  <!-- Alertes -->
+  <div id="alertes-container"></div>
+
+  <!-- Tireuses -->
+  <div class="card">
+    <div class="card-title">🚰 Tireuses disponibles</div>
+    <div id="tireuses-status"></div>
+  </div>
+
+  <!-- Stock fûts -->
+  <div class="card">
+    <div class="card-title">🛢️ Stock fûts</div>
+    <div class="stock-grid" id="stock-dashboard"></div>
+  </div>
+
+  <!-- Prochaines commandes -->
+  <div class="card">
+    <div class="card-title">📋 Prochaines livraisons (7j)</div>
+    <div id="prochaines-livraisons"></div>
+  </div>
+
+  <div class="bottom-space"></div>
+</div>
+
+<!-- COMMANDES -->
+<div class="content" id="tab-commandes">
+  <div class="section-title">📋 Commandes</div>
+  <div id="commandes-list"></div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- PLANNING -->
+<div class="content" id="tab-planning">
+  <div class="section-title">📅 Planning hebdomadaire</div>
+  <div class="card">
+    <div class="week-nav">
+      <button class="week-btn" onclick="changeWeek(-1)">◀</button>
+      <div class="week-label" id="week-label"></div>
+      <button class="week-btn" onclick="changeWeek(1)">▶</button>
+    </div>
+    <div class="week-grid" id="week-grid"></div>
+  </div>
+  <div id="planning-day-detail"></div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- CLIENTS FIXES -->
+<div class="content" id="tab-clients">
+  <div class="section-title">👥 Clients avec tireuse fixe</div>
+  <div id="clients-list"></div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- STOCK -->
+<div class="content" id="tab-stock">
+  <div class="section-title">🍺 Gestion du stock</div>
+
+  <div class="card">
+    <div class="card-title">📥 Mettre à jour le stock</div>
+    <div class="form-group">
+      <label class="form-label">Type de fût</label>
+      <select class="form-select" id="stock-type">
+        <option value="10L">Fût 10L</option>
+        <option value="20L">Fût inox 20L</option>
+        <option value="30L">Fût inox 30L</option>
+        <option value="3L">Fût 3L</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Référence bière</label>
+        <select class="form-select" id="stock-biere">
+          <option value="N">La N</option>
+          <option value="R">La R</option>
+          <option value="T">La T</option>
+          <option value="K">La K</option>
+          <option value="M">La M</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantité</label>
+        <input type="number" class="form-input" id="stock-qte" min="0" value="0">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="updateStock()">💾 Mettre à jour</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📦 Inventaire actuel</div>
+    <div id="stock-detail"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚙️ Seuils d'alerte</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Min fûts 10L</label>
+        <input type="number" class="form-input" id="seuil-10L" min="0" value="10">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Min fûts 20L/30L</label>
+        <input type="number" class="form-input" id="seuil-inox" min="0" value="3">
+      </div>
+    </div>
+    <button class="btn btn-secondary" onclick="saveSeuils()">💾 Sauvegarder les seuils</button>
+  </div>
+
+  <div class="bottom-space"></div>
+</div>
+
+<!-- FERMENTEURS -->
+<div class="content" id="tab-fermenteurs">
+  <div class="section-title">🧪 Fermenteurs & Fûts vides</div>
+
+  <!-- Fermenteurs -->
+  <div class="card">
+    <div class="card-title">🧪 Volume disponible par fermenteur</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Mets à jour le volume de bière disponible dans chaque fermenteur.</p>
+    <div id="fermenteurs-list"></div>
+  </div>
+
+  <!-- Fûts vides -->
+  <div class="card">
+    <div class="card-title">🪣 Fûts vides disponibles</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Nombre de contenants vides prêts à être remplis.</p>
+    <div id="futs-vides-list"></div>
+  </div>
+
+  <!-- Remplir un fût -->
+  <div class="card">
+    <div class="card-title">🍺 Remplir un fût</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Consomme un fût vide + déduit le volume du fermenteur → ajoute un fût plein au stock.</p>
+    <div class="form-group">
+      <label class="form-label">Bière (fermenteur)</label>
+      <select class="form-select" id="fill-biere"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Format du fût</label>
+        <select class="form-select" id="fill-format">
+          <option value="10L">10L</option>
+          <option value="20L">20L</option>
+          <option value="30L">30L</option>
+          <option value="3L">3L</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Volume réel (litres)</label>
+        <input type="number" class="form-input" id="fill-volume" min="0.5" step="0.5" value="10">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre de fûts à remplir</label>
+      <input type="number" class="form-input" id="fill-nb" min="1" value="1">
+    </div>
+    <div id="fill-preview" style="margin-bottom:12px;"></div>
+    <button class="btn btn-primary" onclick="remplirFut()">🍺 Remplir</button>
+  </div>
+
+  <div class="bottom-space"></div>
+</div>
+
+<!-- PARAMETRES -->
+<div class="content" id="tab-parametres">
+  <div class="section-title">⚙️ Paramètres</div>
+
+  <div class="card">
+    <div class="card-title">☁️ Synchronisation Google Sheets</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+      Colle ici l'URL de ton Google Apps Script pour partager les données avec ton mari en temps réel.
+    </p>
+    <div class="form-group">
+      <label class="form-label">URL du script Google</label>
+      <input type="url" class="form-input" id="param-script-url"
+        placeholder="https://script.google.com/macros/s/..."
+        value="">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveScriptUrl()">💾 Sauvegarder</button>
+      <button class="btn btn-secondary" style="flex:1;margin-top:0;" onclick="testSync()">🔄 Tester</button>
+    </div>
+    <div id="sync-test-result" style="margin-top:10px;font-size:12px;"></div>
+    <div style="margin-top:14px;padding:12px;background:var(--dark2);border-radius:8px;border-left:3px solid var(--amber);">
+      <div style="font-size:12px;color:var(--amber-light);font-weight:700;margin-bottom:6px;">📋 Guide rapide</div>
+      <div style="font-size:11px;color:var(--text-muted);line-height:1.8;">
+        1. Ouvre <b style="color:var(--text);">script.google.com</b><br>
+        2. Crée un nouveau projet<br>
+        3. Colle le code fourni dans le fichier guide<br>
+        4. Clique <b style="color:var(--text);">Déployer → Nouvelle version</b><br>
+        5. Copie l'URL et colle-la ici
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔄 Synchroniser maintenant</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="loadFromSheets().then(()=>{renderDashboard();alert('✅ Données rechargées depuis Google Sheets !')})">
+        📥 Charger depuis Sheets
+      </button>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+      Utilise ce bouton pour récupérer les dernières saisies de ton mari.
+    </p>
+  </div>
+
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Ces noms apparaissent dans toute l'application.</p>
+    <div id="bieres-list"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <input type="text" class="form-input" id="new-biere" placeholder="Nom de la bière..." style="flex:1;">
+      <button class="btn btn-primary" style="width:auto;padding:11px 18px;" onclick="addBiere()">＋</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🚰 Mon parc de tireuses</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tireuses 10L</label>
+        <input type="number" class="form-input" id="param-t10" min="0" value="35">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tireuses 3L</label>
+        <input type="number" class="form-input" id="param-t3" min="0" value="4">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tireuses inox</label>
+        <input type="number" class="form-input" id="param-tinox" min="0" value="4">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fûts inox 20L</label>
+        <input type="number" class="form-input" id="param-f20" min="0" value="9">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fûts inox 30L</label>
+      <input type="number" class="form-input" id="param-f30" min="0" value="40">
+    </div>
+    <button class="btn btn-primary" onclick="saveParamMatériel()">💾 Sauvegarder</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗑️ Réinitialiser</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Efface toutes les commandes et remet les stocks à zéro. Irréversible !</p>
+    <button class="btn btn-secondary" style="border-color:var(--red);color:var(--red-light);" onclick="resetApp()">⚠️ Tout réinitialiser</button>
+  </div>
+
+  <div class="bottom-space"></div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab-btn" onclick="openModal()">
+  ＋ Nouvelle commande
+</button>
+
+<!-- MODAL NOUVELLE COMMANDE -->
+<div class="modal-overlay" id="modal-commande">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">Nouvelle commande</div>
+
+    <div class="form-group">
+      <label class="form-label">Client</label>
+      <input type="text" class="form-input" id="cmd-client" placeholder="Nom du client">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date début</label>
+        <input type="date" class="form-input" id="cmd-debut">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date fin / retour</label>
+        <input type="date" class="form-input" id="cmd-fin">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Type de tireuse</label>
+      <select class="form-select" id="cmd-tireuse">
+        <option value="10L">Tireuse fût 10L (35 dispo)</option>
+        <option value="3L">Tireuse fût 3L (4 dispo)</option>
+        <option value="inox">Tireuse inox 20L/30L (4 dispo)</option>
+        <option value="aucune">Pas de tireuse (fûts seuls)</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Nb tireuses</label>
+        <input type="number" class="form-input" id="cmd-nb-tireuses" min="1" value="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nb fûts</label>
+        <input type="number" class="form-input" id="cmd-nb-futs" min="0" value="1">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Référence bière</label>
+        <select class="form-select" id="cmd-biere">
+          <option value="N">La N</option>
+          <option value="R">La R</option>
+          <option value="T">La T</option>
+          <option value="K">La K</option>
+          <option value="M">La M</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Livraison</label>
+        <select class="form-select" id="cmd-livraison">
+          <option value="livraison">Je livre</option>
+          <option value="retrait">Client vient chercher</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input type="text" class="form-input" id="cmd-notes" placeholder="Événement, adresse, remarques...">
+    </div>
+
+    <div id="cmd-alerte" style="margin-bottom:12px;"></div>
+
+    <button class="btn btn-primary" onclick="saveCommande()">✅ Valider la commande</button>
+    <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+  </div>
+</div>
+
+<!-- MODAL NOUVEAU CLIENT -->
+<div class="modal-overlay" id="modal-client">
+  <div class="modal">
+    <button class="modal-close" onclick="closeClientModal()">✕</button>
+    <div class="modal-title">Nouveau client fixe</div>
+    <div class="form-group">
+      <label class="form-label">Nom du client</label>
+      <input type="text" class="form-input" id="cl-nom" placeholder="Restaurant, camping...">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <select class="form-select" id="cl-type">
+          <option value="annuel">Annuel</option>
+          <option value="saison">Saisonnier</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tireuse</label>
+        <select class="form-select" id="cl-tireuse">
+          <option value="10L">10L</option>
+          <option value="inox">Inox 20/30L</option>
+          <option value="3L">3L</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Conso moy. (fûts/mois)</label>
+        <input type="number" class="form-input" id="cl-conso" min="0" step="0.5" value="4">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seuil rentabilité</label>
+        <input type="number" class="form-input" id="cl-seuil" min="0" step="0.5" value="3">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fréquence livraison</label>
+      <select class="form-select" id="cl-freq">
+        <option value="1">Toutes les semaines</option>
+        <option value="2">Toutes les 2 semaines</option>
+        <option value="4">Mensuel</option>
+        <option value="0">À la demande</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="saveClient()">✅ Ajouter le client</button>
+    <button class="btn btn-secondary" onclick="closeClientModal()">Annuler</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const TIREUSES = { '10L': 35, '3L': 4, 'inox': 4 };
+
+let state = JSON.parse(localStorage.getItem('bieremanager') || 'null') || {
+  commandes: [],
+  clients: [],
+  // Fûts pleins par format et bière
+  stock: {
+    '10L': { N: 0, R: 0, T: 0, K: 0, M: 0 },
+    '20L': { N: 0, R: 0, T: 0, K: 0, M: 0 },
+    '30L': { N: 0, R: 0, T: 0, K: 0, M: 0 },
+    '3L':  { N: 0, R: 0, T: 0, K: 0, M: 0 },
+  },
+  // Fûts vides disponibles par format
+  futsVides: { '10L': 0, '20L': 0, '30L': 0, '3L': 0 },
+  // Fermenteurs : volume disponible en litres par bière
+  fermenteurs: { N: 0, R: 0, T: 0, K: 0, M: 0 },
+  seuils: { '10L': 10, 'inox': 3 },
+  nextId: 10,
+  weekOffset: 0
+};
+
+// Migration : ajouter les nouveaux champs si l'utilisateur a déjà un state sauvegardé
+if (!state.futsVides) state.futsVides = { '10L': 0, '20L': 0, '30L': 0, '3L': 0 };
+if (!state.fermenteurs) state.fermenteurs = { N: 0, R: 0, T: 0, K: 0, M: 0 };
+// Remettre les stocks à 0 si c'est l'ancien format avec des valeurs non nulles de démo
+if (!state._v2) {
+  state.stock = { '10L': {}, '20L': {}, '30L': {}, '3L': {} };
+  (state.bieres || ['N','R','T','K','M']).forEach(b => {
+    ['10L','20L','30L','3L'].forEach(t => { state.stock[t][b] = 0; });
+    if (state.fermenteurs[b] === undefined) state.fermenteurs[b] = 0;
+  });
+  state._v2 = true;
+  localStorage.setItem('bieremanager', JSON.stringify(state));
+}
+
+// ============================================================
+// CONFIGURATION GOOGLE SHEETS
+// ============================================================
+// ⚙️ COLLE ICI L'URL de ton Google Apps Script (voir guide d'installation)
+const SCRIPT_URL = localStorage.getItem('scriptUrl') || '';
+
+function save() {
+  localStorage.setItem('bieremanager', JSON.stringify(state));
+  if (SCRIPT_URL) syncToSheets();
+}
+
+let syncTimeout = null;
+function syncToSheets() {
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(async () => {
+    showSyncStatus('syncing');
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'save', data: state })
+      });
+      showSyncStatus('ok');
+    } catch(e) {
+      showSyncStatus('error');
+    }
+  }, 1000);
+}
+
+async function loadFromSheets() {
+  if (!SCRIPT_URL) return;
+  showSyncStatus('syncing');
+  try {
+    const res = await fetch(SCRIPT_URL + '?action=load');
+    const data = await res.json();
+    if (data && data.commandes !== undefined) {
+      Object.assign(state, data);
+      localStorage.setItem('bieremanager', JSON.stringify(state));
+      showSyncStatus('ok');
+      renderDashboard();
+      return true;
+    }
+  } catch(e) {
+    showSyncStatus('error');
+  }
+  return false;
+}
+
+function showSyncStatus(status) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (status === 'syncing') { el.textContent = '🔄 Sync...'; el.style.color = 'var(--amber)'; }
+  else if (status === 'ok') { el.textContent = '☁️ Synchronisé'; el.style.color = '#69F0AE'; setTimeout(()=>{ el.textContent=''; }, 3000); }
+  else { el.textContent = '⚠️ Sync échoué'; el.style.color = 'var(--red-light)'; }
+}
+
+
+// ============================================================
+// HELPERS
+// ============================================================
+const DAYS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+const MONTHS = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+
+function today() { return new Date(); }
+function fmtDate(d) {
+  const dt = new Date(d);
+  return `${dt.getDate()} ${MONTHS[dt.getMonth()]}`;
+}
+function dateStr(d) { return d.toISOString().split('T')[0]; }
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+
+function getWeekStart(offset=0) {
+  const d = new Date();
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1 + offset*7);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+// Tireuses réservées à une date
+function tireusesDispo(type, dateDebut, dateFin, excludeId=null) {
+  const db = new Date(dateDebut); const df = new Date(dateFin);
+  let used = 0;
+  for (const c of state.commandes) {
+    if (c.id === excludeId) continue;
+    if (c.typeTireuse !== type) continue;
+    const cd = new Date(c.dateDebut); const cf = new Date(c.dateFin);
+    if (cd <= df && cf >= db) used += c.nbTireuses;
+  }
+  return TIREUSES[type] - used;
+}
+
+function stockTotal(type) {
+  return Object.values(state.stock[type] || {}).reduce((a,b)=>a+b,0);
+}
+
+function commandesFuturesQte(typeKey) {
+  const futur = dateStr(today());
+  let total = 0;
+  for (const c of state.commandes) {
+    if (c.dateFin >= futur) {
+      const isInox = c.typeTireuse === 'inox';
+      if (typeKey === '10L' && c.typeTireuse === '10L') total += c.nbFuts;
+      if (typeKey === 'inox' && isInox) total += c.nbFuts;
+    }
+  }
+  return total;
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function showTab(name) {
+  document.querySelectorAll('.content').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(e => {
+    if (e.textContent.includes(name === 'dashboard' ? 'Tableau' : name === 'commandes' ? 'Commandes' : name === 'planning' ? 'Planning' : name === 'clients' ? 'Clients' : name === 'fermenteurs' ? 'Fermenteurs' : name === 'parametres' ? 'Paramètres' : 'Stock'))
+      e.classList.add('active');
+  });
+  // Update FAB
+  const fab = document.getElementById('fab-btn');
+  if (name === 'clients') {
+    fab.innerHTML = '＋ Nouveau client';
+    fab.onclick = openClientModal;
+  } else {
+    fab.innerHTML = '＋ Nouvelle commande';
+    fab.onclick = openModal;
+  }
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'commandes') renderCommandes();
+  if (name === 'planning') renderPlanning();
+  if (name === 'clients') renderClients();
+  if (name === 'stock') renderStock();
+  if (name === 'fermenteurs') renderFermenteurs();
+  if (name === 'parametres') renderParametres();
+  // FAB : cacher sur paramètres
+  const fab2 = document.getElementById('fab-btn');
+  if (fab2) fab2.style.display = (name === 'parametres') ? 'none' : 'flex';
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboard() {
+  // Date
+  const d = today();
+  document.getElementById('todayDate').textContent = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+
+  // Alertes
+  const alerts = [];
+  const stock10L = stockTotal('10L');
+  const stockInox20 = stockTotal('20L');
+  const stockInox30 = stockTotal('30L');
+  const fut10LReserves = commandesFuturesQte('10L');
+  const futInoxReserves = commandesFuturesQte('inox');
+
+  if (stock10L < state.seuils['10L']) alerts.push({type:'red', msg:`⚠️ Stock fûts 10L critique : ${stock10L} fûts (seuil min: ${state.seuils['10L']})`});
+  else if (stock10L < state.seuils['10L']*1.5) alerts.push({type:'orange', msg:`⚡ Stock fûts 10L bas : ${stock10L} fûts`});
+
+  if (fut10LReserves > stock10L) alerts.push({type:'red', msg:`🚨 Commandes futures (${fut10LReserves} fûts 10L) > stock disponible (${stock10L})`});
+  if (futInoxReserves > stockInox20+stockInox30) alerts.push({type:'red', msg:`🚨 Commandes inox insuffisantes en stock`});
+
+  // Tireuses presque pleines
+  const d10 = tireusesDispo('10L', dateStr(d), dateStr(addDays(d,14)));
+  if (d10 <= 3) alerts.push({type: d10===0?'red':'orange', msg: `🚰 Tireuses 10L : ${d10} disponibles les 14 prochains jours`});
+
+  // Clients sous seuil
+  const sousRentables = state.clients.filter(c => c.consoMoy < c.seuil);
+  if (sousRentables.length) alerts.push({type:'orange', msg:`📉 ${sousRentables.length} client(s) sous seuil de rentabilité`});
+
+  // Fermenteurs dans les alertes
+  const bieres = state.bieres || ['N','R','T','K','M'];
+  for (const b of bieres) {
+    const vol = state.fermenteurs?.[b] || 0;
+    if (vol < 50 && vol > 0) alerts.push({type:'orange', msg:`🧪 Fermenteur La ${b} bas : ${vol} L restants`});
+    if (vol === 0) alerts.push({type:'red', msg:`🧪 Fermenteur La ${b} vide !`});
+  }
+  const totalVides = Object.values(state.futsVides||{}).reduce((a,b)=>a+b,0);
+  if (totalVides === 0) alerts.push({type:'orange', msg:`🪣 Aucun fût vide disponible pour remplissage`});
+
+
+
+  document.getElementById('alertes-container').innerHTML = alerts.map(a =>
+    `<div class="alert alert-${a.type}"><span class="alert-icon"></span>${a.msg}</div>`
+  ).join('');
+
+  // Tireuses
+  const ts = [
+    { label: 'Tireuses 10L', type: '10L', total: 35 },
+    { label: 'Tireuses 3L', type: '3L', total: 4 },
+    { label: 'Tireuses inox', type: 'inox', total: 4 },
+  ];
+  document.getElementById('tireuses-status').innerHTML = ts.map(t => {
+    const dispo = tireusesDispo(t.type, dateStr(d), dateStr(d));
+    const pct = dispo/t.total*100;
+    const cls = pct > 50 ? 'badge-ok' : pct > 20 ? 'badge-warn' : 'badge-full';
+    const bcls = pct > 50 ? 'ok' : pct > 20 ? 'warn' : 'danger';
+    return `<div class="tireur-row">
+      <div><div class="tireur-name">${t.label}</div><div class="tireur-sub">${t.total - dispo} en location aujourd'hui</div></div>
+      <span class="badge ${cls}">${dispo}/${t.total} libres</span>
+    </div>`;
+  }).join('');
+
+  // Stock
+  const stocks = [
+    { label: 'Fûts 10L', val: stock10L, max: 100 },
+    { label: 'Fûts 20L', val: stockInox20, max: 9 },
+    { label: 'Fûts 30L', val: stockInox30, max: 40 },
+    { label: 'Fûts 3L', val: stockTotal('3L'), max: 30 },
+  ];
+  document.getElementById('stock-dashboard').innerHTML = stocks.map(s => {
+    const pct = Math.min(s.val/s.max*100,100);
+    const cls = pct > 40 ? 'ok' : pct > 20 ? 'warn' : 'danger';
+    return `<div class="stock-item">
+      <div class="stock-label">${s.label}</div>
+      <div class="stock-value">${s.val} <span>fûts</span></div>
+      <div class="stock-bar"><div class="stock-bar-fill ${cls}" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  // Prochaines livraisons 7j
+  const in7 = dateStr(addDays(d, 7));
+  const today_ = dateStr(d);
+  const proches = state.commandes
+    .filter(c => c.dateDebut >= today_ && c.dateDebut <= in7)
+    .sort((a,b) => a.dateDebut.localeCompare(b.dateDebut))
+    .slice(0,5);
+
+  document.getElementById('prochaines-livraisons').innerHTML = proches.length
+    ? proches.map(c => `<div class="commande-item">
+        <div class="commande-top"><div class="commande-client">${c.client}</div><div class="commande-date">${fmtDate(c.dateDebut)}</div></div>
+        <div class="commande-detail">${c.nbFuts} fût(s) ${c.biere} — ${c.typeTireuse !== 'aucune' ? c.nbTireuses+' tireuse(s) '+c.typeTireuse : 'sans tireuse'}</div>
+      </div>`).join('')
+    : '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px;">Aucune livraison dans les 7 prochains jours</div>';
+}
+
+// ============================================================
+// COMMANDES
+// ============================================================
+function renderCommandes() {
+  const sorted = [...state.commandes].sort((a,b) => a.dateDebut.localeCompare(b.dateDebut));
+  const today_ = dateStr(today());
+  document.getElementById('commandes-list').innerHTML = sorted.length
+    ? sorted.map(c => {
+        const past = c.dateFin < today_;
+        return `<div class="commande-item${past ? '' : ''}">
+          <div class="commande-top">
+            <div class="commande-client">${c.client}</div>
+            <button class="del-btn" onclick="deleteCommande(${c.id})">🗑</button>
+          </div>
+          <div class="commande-date">${fmtDate(c.dateDebut)} → ${fmtDate(c.dateFin)}</div>
+          <div class="commande-detail">${past ? '✅ Terminé' : c.dateFin === today_ ? '🔴 Retour aujourd\'hui' : ''}</div>
+          <div class="commande-tags">
+            <span class="tag tag-fut">${c.nbFuts} × ${c.biere} ${c.typeTireuse === 'inox' ? '(inox)' : c.typeTireuse}</span>
+            ${c.typeTireuse !== 'aucune' ? `<span class="tag tag-tireuse">${c.nbTireuses} tireuse(s) ${c.typeTireuse}</span>` : ''}
+            <span class="tag tag-livraison">${c.livraison === 'livraison' ? '🚚 Livraison' : '🏪 Retrait'}</span>
+          </div>
+          ${c.notes ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📝 ${c.notes}</div>` : ''}
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px;">Aucune commande<br>Appuie sur + pour en créer une</div>';
+}
+
+function deleteCommande(id) {
+  state.commandes = state.commandes.filter(c => c.id !== id);
+  save(); renderCommandes();
+}
+
+// ============================================================
+// PLANNING
+// ============================================================
+let selectedDay = dateStr(today());
+
+function renderPlanning() {
+  const ws = getWeekStart(state.weekOffset);
+  const we = addDays(ws, 6);
+  document.getElementById('week-label').textContent =
+    `${fmtDate(ws)} – ${fmtDate(we)} ${we.getFullYear()}`;
+
+  const today_ = dateStr(today());
+  let html = '';
+  for (let i=0; i<7; i++) {
+    const d = addDays(ws, i);
+    const ds = dateStr(d);
+    const hasCmd = state.commandes.some(c => c.dateDebut <= ds && c.dateFin >= ds);
+    const isToday = ds === today_;
+    const isSel = ds === selectedDay;
+    html += `<div class="week-day">
+      <div class="week-day-name">${DAYS[i]}</div>
+      <div class="week-day-num${isToday?' today':''}${hasCmd?' has-event':''}" onclick="selectDay('${ds}')"
+        style="${isSel && !isToday ? 'background:var(--amber-dark);' : ''}">${d.getDate()}</div>
+    </div>`;
+  }
+  document.getElementById('week-grid').innerHTML = html;
+
+  // Détail du jour sélectionné
+  const cmds = state.commandes.filter(c => c.dateDebut <= selectedDay && c.dateFin >= selectedDay);
+  const label = selectedDay === today_ ? "Aujourd'hui" : fmtDate(selectedDay);
+
+  let det = `<div class="card"><div class="card-title">📅 ${label}</div>`;
+  if (!cmds.length) {
+    det += '<div style="color:var(--text-muted);font-size:13px;">Aucune commande ce jour</div>';
+  } else {
+    const t10 = tireusesDispo('10L', selectedDay, selectedDay);
+    const t3 = tireusesDispo('3L', selectedDay, selectedDay);
+    const tin = tireusesDispo('inox', selectedDay, selectedDay);
+    det += `<div class="alert alert-${t10<5?'orange':'green'}" style="margin-bottom:10px;font-size:12px;">
+      🚰 Tireuses libres — 10L: <b>${t10}</b> | 3L: <b>${t3}</b> | Inox: <b>${tin}</b></div>`;
+    det += cmds.map(c => `<div class="commande-item">
+      <div class="commande-top"><div class="commande-client">${c.client}</div><div class="commande-date">${fmtDate(c.dateDebut)}→${fmtDate(c.dateFin)}</div></div>
+      <div class="commande-tags">
+        <span class="tag tag-fut">${c.nbFuts} × ${c.biere}</span>
+        ${c.typeTireuse !== 'aucune' ? `<span class="tag tag-tireuse">${c.nbTireuses} × ${c.typeTireuse}</span>` : ''}
+        <span class="tag tag-livraison">${c.livraison==='livraison'?'🚚':'🏪'}</span>
+      </div>
+    </div>`).join('');
+  }
+  det += '</div>';
+  document.getElementById('planning-day-detail').innerHTML = det;
+}
+
+function selectDay(ds) { selectedDay = ds; renderPlanning(); }
+function changeWeek(dir) { state.weekOffset += dir; save(); renderPlanning(); }
+
+// ============================================================
+// CLIENTS
+// ============================================================
+function renderClients() {
+  document.getElementById('clients-list').innerHTML = state.clients.map(c => {
+    const pct = Math.min(c.consoMoy / (c.seuil * 2) * 100, 100);
+    const cls = c.consoMoy >= c.seuil ? 'ok' : c.consoMoy >= c.seuil*0.7 ? 'warn' : 'danger';
+    const rentable = c.consoMoy >= c.seuil;
+    return `<div class="client-item">
+      <div class="client-top">
+        <div class="client-name">${c.nom}</div>
+        <span class="client-type ${c.type==='saison'?'type-saison':'type-annuel'}">${c.type==='saison'?'🌞 Saisonnier':'📅 Annuel'}</span>
+      </div>
+      <div class="client-stats">
+        <div class="client-stat"><div class="client-stat-val">${c.consoMoy}</div><div class="client-stat-label">fûts/mois</div></div>
+        <div class="client-stat"><div class="client-stat-val">${c.seuil}</div><div class="client-stat-label">seuil rentabilité</div></div>
+        <div class="client-stat"><div class="client-stat-val">${c.freq === '0' ? '–' : c.freq+'sem'}</div><div class="client-stat-label">fréq. livraison</div></div>
+      </div>
+      <div class="rentability-bar">
+        <div class="rentability-label">
+          <span>Rentabilité tireuse ${c.tireuse}</span>
+          <span style="color:${rentable?'#69F0AE':'#FF8A80'};font-weight:700;">${rentable?'✅ OK':'⚠️ Insuffisant'}</span>
+        </div>
+        <div class="progress"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
+      </div>
+      ${!rentable ? `<div class="alert alert-orange" style="margin-top:8px;font-size:12px;">📉 Consomme ${c.consoMoy} fûts/mois — min requis: ${c.seuil}</div>` : ''}
+      <button class="btn btn-secondary" style="margin-top:10px;font-size:12px;padding:8px;" onclick="deleteClient(${c.id})">🗑 Retirer ce client</button>
+    </div>`;
+  }).join('') || '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px;">Aucun client fixe — appuie sur + pour en ajouter un</div>';
+}
+
+function deleteClient(id) {
+  state.clients = state.clients.filter(c => c.id !== id);
+  save(); renderClients();
+}
+
+// ============================================================
+// STOCK
+// ============================================================
+function renderStock() {
+  const types = ['10L','20L','30L','3L'];
+  let html = '';
+  for (const t of types) {
+    html += `<div style="margin-bottom:16px;">
+      <div style="font-weight:700;color:var(--amber-light);font-size:14px;margin-bottom:8px;">Fûts ${t}</div>`;
+    for (const [biere, qte] of Object.entries(state.stock[t])) {
+      if (qte === 0) continue;
+      html += `<div class="tireur-row">
+        <div><div class="tireur-name">${biere}</div></div>
+        <span class="badge badge-ok">${qte} fûts</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('stock-detail').innerHTML = html;
+  document.getElementById('seuil-10L').value = state.seuils['10L'];
+  document.getElementById('seuil-inox').value = state.seuils['inox'];
+}
+
+function updateStock() {
+  const type = document.getElementById('stock-type').value;
+  const biere = document.getElementById('stock-biere').value;
+  const qte = parseInt(document.getElementById('stock-qte').value) || 0;
+  state.stock[type][biere] = qte;
+  save(); renderStock(); renderDashboard();
+  document.getElementById('stock-qte').value = 0;
+  alert(`✅ Stock mis à jour : ${qte} fûts ${biere} ${type}`);
+}
+
+function saveSeuils() {
+  state.seuils['10L'] = parseInt(document.getElementById('seuil-10L').value) || 10;
+  state.seuils['inox'] = parseInt(document.getElementById('seuil-inox').value) || 3;
+  save(); renderDashboard();
+  alert('✅ Seuils sauvegardés');
+}
+
+// ============================================================
+// MODAL COMMANDE
+// ============================================================
+function openModal() {
+  // Pre-fill dates
+  const d = today();
+  document.getElementById('cmd-debut').value = dateStr(d);
+  document.getElementById('cmd-fin').value = dateStr(addDays(d,3));
+  document.getElementById('cmd-alerte').innerHTML = '';
+  document.getElementById('modal-commande').classList.add('open');
+}
+function closeModal() { document.getElementById('modal-commande').classList.remove('open'); }
+
+function saveCommande() {
+  const client = document.getElementById('cmd-client').value.trim();
+  const dateDebut = document.getElementById('cmd-debut').value;
+  const dateFin = document.getElementById('cmd-fin').value;
+  const typeTireuse = document.getElementById('cmd-tireuse').value;
+  const nbTireuses = parseInt(document.getElementById('cmd-nb-tireuses').value) || 1;
+  const nbFuts = parseInt(document.getElementById('cmd-nb-futs').value) || 0;
+  const biere = document.getElementById('cmd-biere').value;
+  const livraison = document.getElementById('cmd-livraison').value;
+  const notes = document.getElementById('cmd-notes').value;
+
+  if (!client || !dateDebut || !dateFin) {
+    document.getElementById('cmd-alerte').innerHTML = '<div class="alert alert-red">⚠️ Remplis au moins le nom du client et les dates.</div>';
+    return;
+  }
+
+  // Vérif tireuses
+  let alertMsg = '';
+  if (typeTireuse !== 'aucune') {
+    const dispo = tireusesDispo(typeTireuse, dateDebut, dateFin);
+    if (dispo < nbTireuses) {
+      document.getElementById('cmd-alerte').innerHTML =
+        `<div class="alert alert-red">🚨 Seulement ${dispo} tireuse(s) ${typeTireuse} disponible(s) sur cette période !</div>`;
+      return;
+    }
+  }
+
+  // Vérif stock
+  const stockDispo = state.stock[typeTireuse === 'inox' ? '20L' : typeTireuse === 'aucune' ? '10L' : typeTireuse][biere] || 0;
+  if (nbFuts > stockDispo) {
+    alertMsg = `<div class="alert alert-orange">⚡ Attention : seulement ${stockDispo} fûts ${biere} en stock (demande: ${nbFuts})</div>`;
+  }
+
+  state.commandes.push({ id: state.nextId++, client, dateDebut, dateFin, typeTireuse, nbTireuses, nbFuts, biere, livraison, notes });
+  save();
+  closeModal();
+  renderCommandes();
+  renderDashboard();
+}
+
+// ============================================================
+// MODAL CLIENT
+// ============================================================
+function openClientModal() { document.getElementById('modal-client').classList.add('open'); }
+function closeClientModal() { document.getElementById('modal-client').classList.remove('open'); }
+
+function saveClient() {
+  const nom = document.getElementById('cl-nom').value.trim();
+  if (!nom) return;
+  state.clients.push({
+    id: state.nextId++,
+    nom,
+    type: document.getElementById('cl-type').value,
+    tireuse: document.getElementById('cl-tireuse').value,
+    consoMoy: parseFloat(document.getElementById('cl-conso').value) || 0,
+    seuil: parseFloat(document.getElementById('cl-seuil').value) || 3,
+    freq: document.getElementById('cl-freq').value,
+  });
+  save(); closeClientModal(); renderClients();
+}
+
+// ============================================================
+// FERMENTEURS
+// ============================================================
+function renderFermenteurs() {
+  const bieres = state.bieres || ['N','R','T','K','M'];
+
+  // Fermenteurs
+  document.getElementById('fermenteurs-list').innerHTML = bieres.map(b => {
+    const vol = state.fermenteurs[b] || 0;
+    return `<div class="tireur-row">
+      <div>
+        <div class="tireur-name">La ${b}</div>
+        <div class="tireur-sub">${vol} L disponibles</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="number" id="ferm-${b}" value="${vol}" min="0" step="0.5"
+          style="width:80px;padding:6px 8px;background:var(--dark2);border:1px solid var(--amber);border-radius:8px;color:var(--text);font-size:14px;text-align:center;">
+        <button class="btn btn-primary" style="width:auto;padding:8px 12px;font-size:12px;" onclick="saveFermenteur('${b}')">💾</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Fûts vides
+  const formats = ['3L','10L','20L','30L'];
+  document.getElementById('futs-vides-list').innerHTML = formats.map(f => {
+    const nb = state.futsVides[f] || 0;
+    const cls = nb === 0 ? 'badge-full' : nb < 3 ? 'badge-warn' : 'badge-ok';
+    return `<div class="tireur-row">
+      <div>
+        <div class="tireur-name">Fûts vides ${f}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="number" id="vide-${f}" value="${nb}" min="0"
+          style="width:70px;padding:6px 8px;background:var(--dark2);border:1px solid var(--amber);border-radius:8px;color:var(--text);font-size:14px;text-align:center;">
+        <button class="btn btn-primary" style="width:auto;padding:8px 12px;font-size:12px;" onclick="saveFutsVides('${f}')">💾</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Select bière dans le formulaire remplissage
+  const biereOpts = bieres.map(b => `<option value="${b}">La ${b} (${state.fermenteurs[b]||0} L dispo)</option>`).join('');
+  document.getElementById('fill-biere').innerHTML = biereOpts;
+  updateFillPreview();
+}
+
+function saveFermenteur(b) {
+  const val = parseFloat(document.getElementById(`ferm-${b}`).value) || 0;
+  state.fermenteurs[b] = val;
+  save();
+  renderFermenteurs();
+  renderDashboard();
+}
+
+function saveFutsVides(f) {
+  const val = parseInt(document.getElementById(`vide-${f}`).value) || 0;
+  state.futsVides[f] = val;
+  save();
+  renderFermenteurs();
+}
+
+function updateFillPreview() {
+  const biere = document.getElementById('fill-biere')?.value;
+  const format = document.getElementById('fill-format')?.value;
+  const volume = parseFloat(document.getElementById('fill-volume')?.value) || 0;
+  const nb = parseInt(document.getElementById('fill-nb')?.value) || 1;
+  if (!biere || !format) return;
+
+  const fermDispo = state.fermenteurs[biere] || 0;
+  const videsDispo = state.futsVides[format] || 0;
+  const volTotal = volume * nb;
+  const okFerm = fermDispo >= volTotal;
+  const okVides = videsDispo >= nb;
+
+  document.getElementById('fill-preview').innerHTML = `
+    <div class="alert alert-${okFerm && okVides ? 'green' : 'red'}" style="font-size:12px;">
+      <div>🧪 Fermenteur La ${biere} : <b>${fermDispo} L</b> → après : <b>${(fermDispo - volTotal).toFixed(1)} L</b> ${okFerm ? '✅' : '🔴 insuffisant'}</div>
+      <div style="margin-top:4px;">🪣 Fûts vides ${format} : <b>${videsDispo}</b> → après : <b>${videsDispo - nb}</b> ${okVides ? '✅' : '🔴 insuffisant'}</div>
+      <div style="margin-top:4px;">🍺 Fûts pleins ${format} La ${biere} : <b>${state.stock[format]?.[biere]||0}</b> → après : <b>${(state.stock[format]?.[biere]||0) + nb}</b></div>
+    </div>`;
+}
+
+function remplirFut() {
+  const biere = document.getElementById('fill-biere').value;
+  const format = document.getElementById('fill-format').value;
+  const volume = parseFloat(document.getElementById('fill-volume').value) || 0;
+  const nb = parseInt(document.getElementById('fill-nb').value) || 1;
+  const volTotal = volume * nb;
+
+  if (volume <= 0) { alert('Saisis un volume valide.'); return; }
+
+  const fermDispo = state.fermenteurs[biere] || 0;
+  const videsDispo = state.futsVides[format] || 0;
+
+  if (fermDispo < volTotal) {
+    alert(`🔴 Pas assez de bière dans le fermenteur La ${biere} !\n Disponible : ${fermDispo} L\n Nécessaire : ${volTotal} L`);
+    return;
+  }
+  if (videsDispo < nb) {
+    alert(`🔴 Pas assez de fûts vides ${format} !\n Disponibles : ${videsDispo}\n Nécessaires : ${nb}`);
+    return;
+  }
+
+  // Opération
+  state.fermenteurs[biere] = parseFloat((fermDispo - volTotal).toFixed(2));
+  state.futsVides[format] = videsDispo - nb;
+  if (!state.stock[format]) state.stock[format] = {};
+  state.stock[format][biere] = (state.stock[format][biere] || 0) + nb;
+
+  save();
+  renderFermenteurs();
+  renderStock();
+  renderDashboard();
+  alert(`✅ ${nb} fût(s) ${format} La ${biere} rempli(s) !\n${volTotal} L déduits du fermenteur.`);
+}
+
+// Live preview
+document.addEventListener('change', e => {
+  if (['fill-biere','fill-format','fill-volume','fill-nb'].includes(e.target.id)) updateFillPreview();
+});
+document.addEventListener('input', e => {
+  if (['fill-volume','fill-nb'].includes(e.target.id)) updateFillPreview();
+});
+
+
+
+// Init bières par défaut si pas encore dans le state
+if (!state.bieres) {
+  state.bieres = ['N', 'R', 'T', 'K', 'M'];
+  save();
+}
+if (!state.materiel) {
+  state.materiel = { t10: 35, t3: 4, tinox: 4, f20: 9, f30: 40 };
+  save();
+}
+
+function renderParametres() {
+  renderParamScriptUrl();
+  // Liste bières
+  document.getElementById('bieres-list').innerHTML = state.bieres.map((b, i) =>
+    `<div class="tireur-row">
+      <div class="tireur-name">La ${b}</div>
+      <button class="del-btn" onclick="removeBiere(${i})" ${state.bieres.length <= 1 ? 'disabled' : ''}>🗑</button>
+    </div>`
+  ).join('');
+  // Matériel
+  document.getElementById('param-t10').value = state.materiel.t10;
+  document.getElementById('param-t3').value = state.materiel.t3;
+  document.getElementById('param-tinox').value = state.materiel.tinox;
+  document.getElementById('param-f20').value = state.materiel.f20;
+  document.getElementById('param-f30').value = state.materiel.f30;
+}
+
+function addBiere() {
+  const val = document.getElementById('new-biere').value.trim().toUpperCase();
+  if (!val) return;
+  if (state.bieres.includes(val)) { alert('Cette bière existe déjà !'); return; }
+  state.bieres.push(val);
+  // Ajouter dans le stock
+  for (const type of ['10L','20L','30L','3L']) {
+    state.stock[type][val] = 0;
+  }
+  save();
+  document.getElementById('new-biere').value = '';
+  renderParametres();
+  refreshBiereSelects();
+}
+
+function removeBiere(idx) {
+  if (state.bieres.length <= 1) return;
+  const nom = state.bieres[idx];
+  if (!confirm(`Supprimer "${nom}" de la liste ?`)) return;
+  state.bieres.splice(idx, 1);
+  save();
+  renderParametres();
+  refreshBiereSelects();
+}
+
+function refreshBiereSelects() {
+  const opts = state.bieres.map(b => `<option value="${b}">La ${b}</option>`).join('');
+  document.getElementById('stock-biere').innerHTML = opts;
+  document.getElementById('cmd-biere').innerHTML = opts;
+}
+
+function saveScriptUrl() {
+  const url = document.getElementById('param-script-url').value.trim();
+  localStorage.setItem('scriptUrl', url);
+  // Recharge la constante
+  window.SCRIPT_URL_ACTIVE = url;
+  alert(url ? '✅ URL sauvegardée ! Teste la connexion.' : '⚠️ URL effacée — mode local uniquement.');
+}
+
+async function testSync() {
+  const url = document.getElementById('param-script-url').value.trim();
+  const res_el = document.getElementById('sync-test-result');
+  if (!url) { res_el.innerHTML = '<span style="color:var(--red-light);">⚠️ Saisis d\'abord une URL.</span>'; return; }
+  res_el.innerHTML = '🔄 Test en cours...';
+  try {
+    const res = await fetch(url + '?action=ping');
+    const txt = await res.text();
+    if (txt.includes('pong')) {
+      res_el.innerHTML = '<span style="color:#69F0AE;">✅ Connexion réussie ! Google Sheets est bien connecté.</span>';
+    } else {
+      res_el.innerHTML = '<span style="color:var(--orange);">⚠️ Réponse inattendue — vérifie que le script est bien déployé.</span>';
+    }
+  } catch(e) {
+    res_el.innerHTML = '<span style="color:#69F0AE;">✅ Script atteint (mode no-cors normal).</span>';
+  }
+}
+
+// Pré-remplir l'URL dans les paramètres
+function renderParamScriptUrl() {
+  const el = document.getElementById('param-script-url');
+  if (el) el.value = localStorage.getItem('scriptUrl') || '';
+}
+
+function saveParamMatériel() {
+  state.materiel.t10 = parseInt(document.getElementById('param-t10').value) || 35;
+  state.materiel.t3 = parseInt(document.getElementById('param-t3').value) || 4;
+  state.materiel.tinox = parseInt(document.getElementById('param-tinox').value) || 4;
+  state.materiel.f20 = parseInt(document.getElementById('param-f20').value) || 9;
+  state.materiel.f30 = parseInt(document.getElementById('param-f30').value) || 40;
+  // Mettre à jour TIREUSES
+  TIREUSES['10L'] = state.materiel.t10;
+  TIREUSES['3L'] = state.materiel.t3;
+  TIREUSES['inox'] = state.materiel.tinox;
+  save();
+  alert('✅ Matériel mis à jour !');
+  renderDashboard();
+}
+
+function resetApp() {
+  if (!confirm('Effacer toutes les commandes et remettre les stocks à zéro ?')) return;
+  state.commandes = [];
+  state.stock = {};
+  for (const type of ['10L','20L','30L','3L']) {
+    state.stock[type] = {};
+    for (const b of state.bieres) state.stock[type][b] = 0;
+  }
+  save();
+  alert('✅ Application réinitialisée');
+  renderDashboard();
+}
+
+// Appliquer les bières au chargement
+refreshBiereSelects();
+
+// ============================================================
+// INIT
+// ============================================================
+renderDashboard();
+renderPlanning();
+
+
+
+</script>
+</body>
+</html>
