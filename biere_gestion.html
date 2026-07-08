@@ -446,51 +446,38 @@ const APIKEY_KEY='bm_api_key';
 
 async function pushToSheets(){
   const binId=localStorage.getItem(BIN_KEY);
-  const apiKey=localStorage.getItem(APIKEY_KEY);
-  if(!binId||!apiKey)return;
+  if(!binId)return;
+  const apiKey=localStorage.getItem(APIKEY_KEY)||'';
   showSync('syncing');
   try{
-    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}`,{
-      method:'PUT',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Master-Key':apiKey,
-        'X-Bin-Versioning':'false'
-      },
-      body:JSON.stringify(state)
-    });
+    const headers={'Content-Type':'application/json','X-Bin-Versioning':'false'};
+    if(apiKey)headers['X-Master-Key']=apiKey;
+    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}`,{method:'PUT',headers,body:JSON.stringify(state)});
     if(res.ok){showSync('ok');}
-    else{console.error('JSONBin push error:',res.status);showSync('error');}
-  }catch(e){console.error('JSONBin push exception:',e);showSync('error');}
+    else{console.error('JSONBin push:',res.status);showSync('error');}
+  }catch(e){console.error('JSONBin push:',e);showSync('error');}
 }
 
 async function pullFromSheets(){
   const binId=localStorage.getItem(BIN_KEY);
-  const apiKey=localStorage.getItem(APIKEY_KEY);
-  if(!binId||!apiKey)return false;
+  if(!binId)return false;
+  const apiKey=localStorage.getItem(APIKEY_KEY)||'';
   showSync('syncing');
   try{
-    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
-      method:'GET',
-      headers:{
-        'X-Master-Key':apiKey,
-        'X-Bin-Meta':'false'
-      }
-    });
-    if(!res.ok){console.error('JSONBin pull error:',res.status);showSync('error');return false;}
+    const headers={'X-Bin-Meta':'false'};
+    if(apiKey)headers['X-Master-Key']=apiKey;
+    const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{method:'GET',headers});
+    if(!res.ok){console.error('JSONBin pull:',res.status);showSync('error');return false;}
     const data=await res.json();
-    // JSONBin renvoie soit {record:{...}} soit directement les données
     const record=data.record!==undefined?data.record:data;
     if(record&&record.commandes!==undefined){
       state=record;migrate();
       localStorage.setItem(STORE_KEY,JSON.stringify(state));
       showSync('ok');return true;
     }else{
-      // Le bin est vide ou mal formé — on pousse l'état actuel
-      await pushToSheets();
-      return true;
+      await pushToSheets();return true;
     }
-  }catch(e){console.error('JSONBin pull exception:',e);showSync('error');return false;}
+  }catch(e){console.error('JSONBin pull:',e);showSync('error');return false;}
 }
 
 function showSync(s){
@@ -511,9 +498,9 @@ function saveScriptUrl(){
   const apiKey=document.getElementById('param-api-key').value.trim();
   localStorage.setItem(BIN_KEY,binId);
   localStorage.setItem(APIKEY_KEY,apiKey);
-  document.getElementById('sync-result').innerHTML=binId&&apiKey
+  document.getElementById('sync-result').innerHTML=binId
     ?'<span style="color:#69F0AE">✅ Configuration sauvegardée ! Teste avec 📥</span>'
-    :'<span style="color:var(--orange)">⚠️ Remplis les deux champs</span>';
+    :'<span style="color:var(--orange)">⚠️ Le Bin ID est obligatoire</span>';
 }
 
 // ================================================================
