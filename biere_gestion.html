@@ -414,12 +414,15 @@ let state=(()=>{
 
 // Migrations compatibles
 function migrate(){
+  if(!state.commandes) state.commandes=[];
   if(!state.tireuses||!state.tireuses.length) state.tireuses=initTireuses();
+  if(!state.stock) state.stock={'10L':{},'20L':{},'30L':{},'3L':{}};
   if(!state.futsVides) state.futsVides={'10L':0,'20L':0,'30L':0,'3L':0};
   if(!state.fermenteurs) state.fermenteurs={};
   if(!state.bieres) state.bieres=['N','R','T','K','M'];
   if(!state.seuils) state.seuils={'10L':10,'inox':3};
   if(!state.clients) state.clients=[];
+  if(!state.nextId) state.nextId=1;
   if(!state.weekOff) state.weekOff=0;
   if(!state.tlOff) state.tlOff=0;
   state.bieres.forEach(b=>{
