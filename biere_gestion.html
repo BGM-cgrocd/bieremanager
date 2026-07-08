@@ -125,6 +125,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
   <div id="alertes-container"></div>
   <div class="card"><div class="card-title">🚰 Tireuses disponibles</div><div id="dash-tireuses"></div></div>
   <div class="card"><div class="card-title">🛢️ Stock fûts pleins</div><div class="stock-grid" id="dash-stock"></div></div>
+  <div class="card"><div class="card-title">🧪 À brasser</div><div id="dash-brasser"></div></div>
   <div class="card"><div class="card-title">📋 Livraisons (7 jours)</div><div id="dash-livraisons"></div></div>
   <div class="bottom-space"></div>
 </div>
@@ -283,6 +284,8 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
       <div class="form-group"><label class="form-label">Min fûts 10L</label><input type="number" class="form-input" id="seuil-10L" min="0"></div>
       <div class="form-group"><label class="form-label">Min fûts inox</label><input type="number" class="form-input" id="seuil-inox" min="0"></div>
     </div>
+    <div class="form-group"><label class="form-label">🧪 Délai de brassage (jours) — horizon des alertes "à brasser"</label>
+      <input type="number" class="form-input" id="horizon-brassage" min="1" max="60"></div>
     <button class="btn btn-primary" onclick="saveSeuils()">💾 Sauvegarder</button>
   </div>
   <div class="bottom-space"></div>
@@ -297,6 +300,10 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     <button class="modal-close" onclick="closeModal('modal-cmd')">✕</button>
     <div class="modal-title" id="modal-cmd-title">Nouvelle commande</div>
     <input type="hidden" id="cmd-edit-id">
+    <div class="form-group"><label class="form-label">👥 Client fixe (pré-remplit la commande)</label>
+      <select class="form-select" id="cmd-client-fixe" onchange="applyClientFixe()">
+        <option value="">— Nouveau client / ponctuel —</option>
+      </select></div>
     <div class="form-group"><label class="form-label">Client</label><input type="text" class="form-input" id="cmd-client" placeholder="Nom du client"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date début</label><input type="date" class="form-input" id="cmd-debut"></div>
@@ -354,6 +361,12 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     </div>
     <div class="form-group"><label class="form-label">Fréquence livraison</label>
       <select class="form-select" id="cl-freq"><option value="1">Hebdomadaire</option><option value="2">Toutes les 2 sem.</option><option value="4">Mensuel</option><option value="0">À la demande</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Bière habituelle</label>
+        <select class="form-select" id="cl-biere-hab"></select></div>
+      <div class="form-group"><label class="form-label">Fûts / livraison</label>
+        <input type="number" class="form-input" id="cl-futs-hab" min="1" value="1"></div>
+    </div>
     <button class="btn btn-primary" onclick="saveClient()">✅ Sauvegarder</button>
     <button class="btn btn-secondary" onclick="closeModal('modal-client')">Annuler</button>
   </div>
@@ -421,6 +434,7 @@ function migrate(){
   if(!state.fermenteurs) state.fermenteurs={};
   if(!state.bieres) state.bieres=['N','R','T','K','M'];
   if(!state.seuils) state.seuils={'10L':10,'inox':3};
+  if(!state.horizonBrassage) state.horizonBrassage=21;
   if(!state.clients) state.clients=[];
   if(!state.nextId) state.nextId=1;
   if(!state.weekOff) state.weekOff=0;
@@ -432,25 +446,27 @@ function migrate(){
 }
 migrate();
 
-function save(){localStorage.setItem(STORE_KEY,JSON.stringify(state));scheduleSync();}
-
-// ================================================================
-// GOOGLE SHEETS SYNC
-// ================================================================
-let syncTimer=null;
-function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(pushToSheets,2000);}
+function save(){
+  state.lastModified=Date.now();
+  localStorage.setItem(STORE_KEY,JSON.stringify(state));
+  scheduleSync();
+}
 
 // ================================================================
 // SYNC VIA JSONBIN.IO (fonctionne depuis GitHub Pages sans CORS)
 // ================================================================
-// BIN_ID et API_KEY sont stockés dans localStorage
 const BIN_KEY='bm_bin_id';
 const APIKEY_KEY='bm_api_key';
+let syncTimer=null;
+let isSyncing=false;
+
+function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(pushToSheets,2000);}
 
 async function pushToSheets(){
   const binId=localStorage.getItem(BIN_KEY);
-  if(!binId)return;
+  if(!binId||isSyncing)return;
   const apiKey=localStorage.getItem(APIKEY_KEY)||'';
+  isSyncing=true;
   showSync('syncing');
   try{
     const headers={'Content-Type':'application/json'};
@@ -461,31 +477,65 @@ async function pushToSheets(){
     if(res.ok){showSync('ok');}
     else{const t=await res.text();console.error('push:',res.status,t);showSync('error');}
   }catch(e){console.error('push:',e);showSync('error');}
+  isSyncing=false;
 }
 
-async function pullFromSheets(){
+async function pullFromSheets(silent=false){
   const binId=localStorage.getItem(BIN_KEY);
   if(!binId)return false;
   const apiKey=localStorage.getItem(APIKEY_KEY)||'';
-  showSync('syncing');
+  if(!silent)showSync('syncing');
   try{
     const headers={};
     if(apiKey)headers['X-Master-Key']=apiKey;
     const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{method:'GET',headers});
-    if(!res.ok){const t=await res.text();console.error('pull:',res.status,t);showSync('error');return false;}
+    if(!res.ok){const t=await res.text();console.error('pull:',res.status,t);if(!silent)showSync('error');return false;}
     const data=await res.json();
-    // JSONBin retourne toujours {record:{...}, metadata:{...}}
     const record=data.record!==undefined?data.record:data;
     if(record&&record.commandes!==undefined){
-      state=record;migrate();
-      localStorage.setItem(STORE_KEY,JSON.stringify(state));
-      showSync('ok');return true;
+      // Protection anti-écrasement : ne remplace que si la version en ligne est plus récente
+      const localTime=state.lastModified||0;
+      const remoteTime=record.lastModified||0;
+      if(remoteTime>=localTime){
+        state=record;migrate();
+        localStorage.setItem(STORE_KEY,JSON.stringify(state));
+        showSync('ok');
+        return true;
+      }else{
+        // Version locale plus récente → on pousse
+        if(!silent)await pushToSheets();
+        return false;
+      }
     }else{
-      // Bin vide — on initialise avec l'état actuel
       await pushToSheets();return true;
     }
-  }catch(e){console.error('pull:',e);showSync('error');return false;}
+  }catch(e){console.error('pull:',e);if(!silent)showSync('error');return false;}
 }
+
+// Synchro auto au démarrage
+async function autoSyncOnStart(){
+  const binId=localStorage.getItem(BIN_KEY);
+  if(!binId)return;
+  const changed=await pullFromSheets(true);
+  if(changed){renderDashboard();if(typeof renderCommandes==='function')renderCommandes();}
+}
+
+// Synchro auto périodique (toutes les 30 secondes)
+setInterval(async()=>{
+  const binId=localStorage.getItem(BIN_KEY);
+  if(!binId||isSyncing)return;
+  const changed=await pullFromSheets(true);
+  if(changed){
+    renderDashboard();
+    // Rafraîchir l'onglet actif
+    const active=document.querySelector('.content.active');
+    if(active){
+      const id=active.id.replace('tab-','');
+      const fn={commandes:renderCommandes,planning:renderPlanning,timeline:renderTimeline,clients:renderClients,tireuses:renderTireuses,brassage:renderBrassage,stock:renderStock};
+      if(fn[id])fn[id]();
+    }
+  }
+},30000);
 
 function showSync(s){
   const el=document.getElementById('sync-status');if(!el)return;
@@ -518,6 +568,7 @@ async function forcePull(){
       // TEST 2 : écriture
       out.innerHTML='<span style="color:var(--amber)">🔄 Test écriture...</span>';
       try{
+        state.lastModified=Date.now();
         const h2={'Content-Type':'application/json'};if(apiKey)h2['X-Master-Key']=apiKey;
         const w=await fetch(`https://api.jsonbin.io/v3/b/${binId}`,{method:'PUT',headers:h2,body:JSON.stringify(state)});
         if(w.ok){out.innerHTML='<span style="color:#69F0AE">✅ Synchro complète OK (lecture + écriture) !</span>';}
@@ -612,6 +663,57 @@ function renderDashboard(){
       <div class="tags">${(c.bieres||[{biere:c.biere,nb:c.nbFuts}]).map(b=>`<span class="tag tag-fut">${b.nb}× La ${b.biere}</span>`).join('')}
       ${c.typeTireuse!=='aucune'?`<span class="tag tag-tireuse">${c.nbTireuses}× ${c.typeTireuse}</span>`:''}</div></div>`).join('')
     :'<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">Aucune livraison cette semaine</div>';
+
+  // À BRASSER : sur l'horizon de brassage (défaut 21j)
+  // CERTAIN = commandes réelles enregistrées | PRÉVISIONNEL = estimation clients fixes
+  const horizon=state.horizonBrassage||21;
+  const finHorizon=addD(ts,horizon);
+
+  const certain={}, prevision={};
+  state.bieres.forEach(b=>{certain[b]=0;prevision[b]=0;});
+
+  // 1) Commandes réelles (certain)
+  state.commandes.forEach(c=>{
+    if(c.retourFait)return;
+    if(c.dateDebut>finHorizon)return;
+    (c.bieres||[{biere:c.biere,nb:c.nbFuts}]).forEach(b=>{if(certain[b.biere]!==undefined)certain[b.biere]+=b.nb;});
+  });
+
+  // 2) Clients fixes sans commande déjà enregistrée sur l'horizon (prévisionnel)
+  // Estimation : conso mensuelle ramenée à l'horizon, selon fréquence
+  state.clients.forEach(cl=>{
+    if(!cl.biereHabituelle||prevision[cl.biereHabituelle]===undefined)return;
+    // Nombre de livraisons prévues sur l'horizon selon la fréquence (en semaines)
+    const freqSem=parseInt(cl.freq)||0;
+    if(freqSem===0)return; // "à la demande" = pas de prévision
+    const nbLivraisons=Math.floor((horizon/7)/freqSem);
+    const futsParLivraison=cl.futsHabituels||Math.ceil((cl.consoMoy||0)/ (4/ (freqSem||1)) )||1;
+    prevision[cl.biereHabituelle]+=nbLivraisons*futsParLivraison;
+  });
+
+  // 3) Comparer aux stocks
+  const aBrasser=[];
+  state.bieres.forEach(b=>{
+    const stockB=['10L','20L','30L','3L'].reduce((s,t)=>s+(state.stock[t]?.[b]||0),0);
+    const fermB=state.fermenteurs[b]||0; // litres déjà en cuve = déjà "en cours"
+    const besoinTotal=certain[b]+prevision[b];
+    const deficit=besoinTotal-stockB;
+    if(deficit>0){
+      aBrasser.push({biere:b,deficit,certain:certain[b],prevision:prevision[b],stock:stockB,ferm:fermB});
+    }
+  });
+
+  document.getElementById('dash-brasser').innerHTML=
+    `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Horizon : ${horizon} jours (délai de brassage) · 🔴 commandes fermes · 🟡 prévisionnel clients fixes</div>`+
+    (aBrasser.length
+    ?aBrasser.map(x=>`<div class="row">
+        <div>
+          <div class="row-name">La ${x.biere}</div>
+          <div class="row-sub">🔴 ${x.certain} ferme${x.prevision>0?` · 🟡 ${x.prevision} prévu`:''} · 📦 ${x.stock} en stock${x.ferm>0?` · 🧪 ${x.ferm}L en cuve`:''}</div>
+        </div>
+        <span class="badge badge-${x.certain>x.stock?'full':'warn'}">${x.deficit} à produire</span>
+      </div>`).join('')
+    :'<div style="color:#69F0AE;font-size:13px;text-align:center;padding:12px">✅ Stock suffisant sur les '+horizon+' prochains jours</div>');
 }
 
 // ================================================================
@@ -629,6 +731,7 @@ function renderCommandes(){
       <div class="cmd-top">
         <div class="cmd-client">${c.client} ${retourFait?'<span style="color:#69F0AE;font-size:11px">✅ Rendu</span>':''}</div>
         <div style="display:flex">
+          <button class="icon-btn" onclick="dupliquerCommande(${c.id})" title="Dupliquer">📋</button>
           <button class="icon-btn" onclick="editCommande(${c.id})" title="Modifier">✏️</button>
           <button class="icon-btn" onclick="deleteCommande(${c.id})" title="Supprimer">🗑</button>
         </div>
@@ -656,6 +759,11 @@ function editCommande(id){
   const c=state.commandes.find(x=>x.id===id);if(!c)return;
   document.getElementById('modal-cmd-title').textContent='Modifier commande';
   document.getElementById('cmd-edit-id').value=id;
+  // Remplir sélecteur clients fixes
+  const sel=document.getElementById('cmd-client-fixe');
+  sel.innerHTML='<option value="">— Nouveau client / ponctuel —</option>'+
+    state.clients.map(cl=>`<option value="${cl.id}">${cl.nom}</option>`).join('');
+  sel.value='';
   document.getElementById('cmd-client').value=c.client;
   document.getElementById('cmd-debut').value=c.dateDebut;
   document.getElementById('cmd-fin').value=c.dateFin;
@@ -664,7 +772,32 @@ function editCommande(id){
   document.getElementById('cmd-livraison').value=c.livraison;
   document.getElementById('cmd-notes').value=c.notes||'';
   document.getElementById('cmd-alerte').innerHTML='';
-  // Remplir les lignes bières
+  document.getElementById('cmd-alerte').dataset.confirmed='';
+  const bieres=c.bieres||[{biere:c.biere||state.bieres[0],nb:c.nbFuts||1}];
+  document.getElementById('bieres-lignes').innerHTML='';
+  bieres.forEach(b=>addBiereLigne(b.biere,b.nb));
+  document.getElementById('modal-cmd').classList.add('open');
+}
+
+function dupliquerCommande(id){
+  const c=state.commandes.find(x=>x.id===id);if(!c)return;
+  document.getElementById('modal-cmd-title').textContent='Nouvelle commande (copie)';
+  document.getElementById('cmd-edit-id').value='';
+  const sel=document.getElementById('cmd-client-fixe');
+  sel.innerHTML='<option value="">— Nouveau client / ponctuel —</option>'+
+    state.clients.map(cl=>`<option value="${cl.id}">${cl.nom}</option>`).join('');
+  sel.value='';
+  document.getElementById('cmd-client').value=c.client;
+  // Nouvelles dates : décalées à aujourd'hui, même durée
+  const duree=Math.round((new Date(c.dateFin)-new Date(c.dateDebut))/(1000*60*60*24));
+  document.getElementById('cmd-debut').value=todayStr();
+  document.getElementById('cmd-fin').value=addD(todayStr(),duree>0?duree:3);
+  document.getElementById('cmd-tireuse').value=c.typeTireuse;
+  document.getElementById('cmd-nb-tireuses').value=c.nbTireuses;
+  document.getElementById('cmd-livraison').value=c.livraison;
+  document.getElementById('cmd-notes').value=c.notes||'';
+  document.getElementById('cmd-alerte').innerHTML='';
+  document.getElementById('cmd-alerte').dataset.confirmed='';
   const bieres=c.bieres||[{biere:c.biere||state.bieres[0],nb:c.nbFuts||1}];
   document.getElementById('bieres-lignes').innerHTML='';
   bieres.forEach(b=>addBiereLigne(b.biere,b.nb));
@@ -822,10 +955,16 @@ function renderClients(){
   }).join(''):'<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucun client — appuie sur +</div>';
 }
 
+function fillBiereHabSelect(selected){
+  const el=document.getElementById('cl-biere-hab');
+  el.innerHTML=state.bieres.map(b=>`<option value="${b}" ${b===selected?'selected':''}>La ${b}</option>`).join('');
+}
 function openClientModal(){
   document.getElementById('modal-client-title').textContent='Nouveau client';
   document.getElementById('cl-edit-id').value='';
   ['cl-nom','cl-conso','cl-seuil'].forEach(id=>{document.getElementById(id).value=id==='cl-nom'?'':id==='cl-conso'?'4':'3';});
+  fillBiereHabSelect(state.bieres[0]);
+  document.getElementById('cl-futs-hab').value=1;
   document.getElementById('modal-client').classList.add('open');
 }
 function editClient(id){
@@ -838,12 +977,14 @@ function editClient(id){
   document.getElementById('cl-conso').value=c.consoMoy;
   document.getElementById('cl-seuil').value=c.seuil;
   document.getElementById('cl-freq').value=c.freq;
+  fillBiereHabSelect(c.biereHabituelle||state.bieres[0]);
+  document.getElementById('cl-futs-hab').value=c.futsHabituels||1;
   document.getElementById('modal-client').classList.add('open');
 }
 function saveClient(){
   const nom=document.getElementById('cl-nom').value.trim();if(!nom)return;
   const eid=document.getElementById('cl-edit-id').value;
-  const obj={id:eid?parseInt(eid):state.nextId++,nom,type:document.getElementById('cl-type').value,tireuse:document.getElementById('cl-tireuse').value,consoMoy:parseFloat(document.getElementById('cl-conso').value)||0,seuil:parseFloat(document.getElementById('cl-seuil').value)||3,freq:document.getElementById('cl-freq').value};
+  const obj={id:eid?parseInt(eid):state.nextId++,nom,type:document.getElementById('cl-type').value,tireuse:document.getElementById('cl-tireuse').value,consoMoy:parseFloat(document.getElementById('cl-conso').value)||0,seuil:parseFloat(document.getElementById('cl-seuil').value)||3,freq:document.getElementById('cl-freq').value,biereHabituelle:document.getElementById('cl-biere-hab').value,futsHabituels:parseInt(document.getElementById('cl-futs-hab').value)||1};
   if(eid)state.clients=state.clients.map(c=>c.id===parseInt(eid)?obj:c);else state.clients.push(obj);
   save();closeModal('modal-client');renderClients();
 }
@@ -979,6 +1120,7 @@ function renderConfig(){
   document.getElementById('param-api-key').value=localStorage.getItem(APIKEY_KEY)||'';
   document.getElementById('seuil-10L').value=state.seuils['10L'];
   document.getElementById('seuil-inox').value=state.seuils['inox'];
+  document.getElementById('horizon-brassage').value=state.horizonBrassage||21;
   document.getElementById('bieres-list').innerHTML=state.bieres.map((b,i)=>
     `<div class="row"><div class="row-name">La ${b}</div>
       <button class="icon-btn" onclick="removeBiere(${i})" ${state.bieres.length<=1?'disabled':''}>🗑</button></div>`).join('');
@@ -986,6 +1128,7 @@ function renderConfig(){
 function saveSeuils(){
   state.seuils['10L']=parseInt(document.getElementById('seuil-10L').value)||10;
   state.seuils['inox']=parseInt(document.getElementById('seuil-inox').value)||3;
+  state.horizonBrassage=parseInt(document.getElementById('horizon-brassage').value)||21;
   save();alert('✅ Seuils sauvegardés');
 }
 function addBiere(){
@@ -1017,13 +1160,34 @@ function openCmdModal(){
   document.getElementById('cmd-nb-tireuses').value=1;
   document.getElementById('cmd-notes').value='';
   document.getElementById('cmd-alerte').innerHTML='';
+  document.getElementById('cmd-alerte').dataset.confirmed='';
   document.getElementById('bieres-lignes').innerHTML='';
+  // Remplir le sélecteur de clients fixes
+  const sel=document.getElementById('cmd-client-fixe');
+  sel.innerHTML='<option value="">— Nouveau client / ponctuel —</option>'+
+    state.clients.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
+  sel.value='';
   addBiereLigne();
   document.getElementById('modal-cmd').classList.add('open');
 }
 
+function applyClientFixe(){
+  const id=document.getElementById('cmd-client-fixe').value;
+  if(!id)return;
+  const c=state.clients.find(x=>x.id===parseInt(id));
+  if(!c)return;
+  document.getElementById('cmd-client').value=c.nom;
+  // Type de tireuse du client
+  document.getElementById('cmd-tireuse').value=c.tireuse;
+  // Bière habituelle si définie
+  if(c.biereHabituelle){
+    document.getElementById('bieres-lignes').innerHTML='';
+    addBiereLigne(c.biereHabituelle, c.futsHabituels||1);
+  }
+}
+
 function addBiereLigne(biere=null,nb=1){
-  const opts=state.bieres.map(b=>`<option value="${b}" ${b===biere?'selected':'+'}>La ${b}</option>`).join('');
+  const opts=state.bieres.map(b=>`<option value="${b}" ${b===biere?'selected':''}>La ${b}</option>`).join('');
   const idx=document.querySelectorAll('.biere-line').length;
   const div=document.createElement('div');
   div.className='biere-line';
@@ -1060,6 +1224,22 @@ function saveCommande(){
     if(dispo<nbTireuses){document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 Seulement ${dispo} tireuse(s) ${typeTireuse} disponible(s) !</div>`;return;}
   }
 
+  // Vérification stock (informative, ne bloque pas car la bière peut être brassée d'ici la livraison)
+  const fmt=typeTireuse==='inox'?null:typeTireuse==='aucune'?'10L':typeTireuse;
+  let manque=[];
+  bieres.forEach(b=>{
+    if(fmt){
+      const dispo=state.stock[fmt]?.[b.biere]||0;
+      if(dispo<b.nb)manque.push(`La ${b.biere} : ${dispo} en stock / ${b.nb} demandé(s)`);
+    }
+  });
+  if(manque.length && !document.getElementById('cmd-alerte').dataset.confirmed){
+    document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-orange">⚠️ Stock insuffisant :<br>${manque.join('<br>')}<br><b>Clique à nouveau sur Valider pour confirmer quand même</b> (ex: si tu vas brasser).</div>`;
+    document.getElementById('cmd-alerte').dataset.confirmed='1';
+    return;
+  }
+  document.getElementById('cmd-alerte').dataset.confirmed='';
+
   const obj={id:eid?parseInt(eid):state.nextId++,client,dateDebut,dateFin,typeTireuse,nbTireuses,bieres,livraison,notes,retourFait:false};
   if(eid)state.commandes=state.commandes.map(c=>c.id===parseInt(eid)?obj:c);
   else state.commandes.push(obj);
@@ -1074,6 +1254,8 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 refreshSelects();
 renderDashboard();
 renderPlanning();
+autoSyncOnStart();
+
 </script>
 </body>
 </html>
