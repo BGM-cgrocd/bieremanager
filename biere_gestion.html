@@ -452,12 +452,16 @@ async function pushToSheets(){
   try{
     const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}`,{
       method:'PUT',
-      headers:{'Content-Type':'application/json','X-Master-Key':apiKey},
+      headers:{
+        'Content-Type':'application/json',
+        'X-Master-Key':apiKey,
+        'X-Bin-Versioning':'false'
+      },
       body:JSON.stringify(state)
     });
-    const data=await res.json();
-    showSync(data.metadata?'ok':'error');
-  }catch(e){showSync('error');}
+    if(res.ok){showSync('ok');}
+    else{console.error('JSONBin push error:',res.status);showSync('error');}
+  }catch(e){console.error('JSONBin push exception:',e);showSync('error');}
 }
 
 async function pullFromSheets(){
@@ -467,16 +471,26 @@ async function pullFromSheets(){
   showSync('syncing');
   try{
     const res=await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`,{
-      headers:{'X-Master-Key':apiKey}
+      method:'GET',
+      headers:{
+        'X-Master-Key':apiKey,
+        'X-Bin-Meta':'false'
+      }
     });
+    if(!res.ok){console.error('JSONBin pull error:',res.status);showSync('error');return false;}
     const data=await res.json();
-    if(data.record&&data.record.commandes!==undefined){
-      state=data.record;migrate();
+    // JSONBin renvoie soit {record:{...}} soit directement les données
+    const record=data.record!==undefined?data.record:data;
+    if(record&&record.commandes!==undefined){
+      state=record;migrate();
       localStorage.setItem(STORE_KEY,JSON.stringify(state));
       showSync('ok');return true;
+    }else{
+      // Le bin est vide ou mal formé — on pousse l'état actuel
+      await pushToSheets();
+      return true;
     }
-  }catch(e){}
-  showSync('error');return false;
+  }catch(e){console.error('JSONBin pull exception:',e);showSync('error');return false;}
 }
 
 function showSync(s){
