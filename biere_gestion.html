@@ -403,6 +403,8 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     <button class="modal-close" onclick="closeModal('modal-tireuse')">✕</button>
     <div class="modal-title">🚰 Modifier tireuse</div>
     <input type="hidden" id="tir-edit-id">
+    <div class="form-group"><label class="form-label">Nom / ID de la tireuse</label>
+      <input type="text" class="form-input" id="tir-id" placeholder="ex: TI-05-1B-eau"></div>
     <div class="form-group"><label class="form-label">État</label>
       <select class="form-select" id="tir-etat"><option value="ok">✅ Opérationnelle</option><option value="panne">🔴 En panne</option><option value="entretien">🔧 Entretien</option></select></div>
     <div id="tir-inox-fields" style="display:none">
@@ -417,6 +419,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     </div>
     <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="tir-notes"></div>
     <button class="btn btn-primary" onclick="saveTireuse()">✅ Sauvegarder</button>
+    <button class="btn btn-danger" onclick="deleteTireuse()">🗑 Supprimer cette tireuse</button>
     <button class="btn btn-secondary" onclick="closeModal('modal-tireuse')">Annuler</button>
   </div>
 </div>
@@ -1171,6 +1174,7 @@ function renderTireuses(){
 function openEditTireuse(id){
   const t=state.tireuses.find(x=>x.id===id);if(!t)return;
   document.getElementById('tir-edit-id').value=id;
+  document.getElementById('tir-id').value=t.id;
   document.getElementById('tir-etat').value=t.etat;
   document.getElementById('tir-notes').value=t.notes||'';
   // Champs inox
@@ -1184,15 +1188,42 @@ function openEditTireuse(id){
   document.getElementById('modal-tireuse').classList.add('open');
 }
 function saveTireuse(){
-  const id=document.getElementById('tir-edit-id').value;
-  const t=state.tireuses.find(x=>x.id===id);if(!t)return;
-  const patch={etat:document.getElementById('tir-etat').value,notes:document.getElementById('tir-notes').value};
+  const oldId=document.getElementById('tir-edit-id').value;
+  const t=state.tireuses.find(x=>x.id===oldId);if(!t)return;
+  const newId=document.getElementById('tir-id').value.trim()||oldId;
+  // Vérifier que le nouveau nom n'existe pas déjà (sauf si c'est le même)
+  if(newId!==oldId && state.tireuses.some(x=>x.id===newId)){
+    alert('⚠️ Une tireuse porte déjà ce nom. Choisis un nom différent.');return;
+  }
+  const patch={id:newId,etat:document.getElementById('tir-etat').value,notes:document.getElementById('tir-notes').value};
   if(t.type==='inox'){
     patch.becs=parseInt(document.getElementById('tir-becs').value)||1;
     patch.debit=document.getElementById('tir-debit').value.trim();
     patch.compresseur=document.getElementById('tir-compresseur').value==='oui';
   }
-  state.tireuses=state.tireuses.map(x=>x.id===id?{...x,...patch}:x);
+  state.tireuses=state.tireuses.map(x=>x.id===oldId?{...x,...patch}:x);
+  // Si l'ID a changé, répercuter dans les commandes qui référencent cette tireuse inox
+  if(newId!==oldId){
+    state.commandes.forEach(c=>{
+      if(Array.isArray(c.tireuses)){
+        c.tireuses.forEach(tt=>{if(tt.type==='inox'&&tt.inoxId===oldId)tt.inoxId=newId;});
+      }
+    });
+  }
+  save();closeModal('modal-tireuse');renderTireuses();
+}
+function deleteTireuse(){
+  const id=document.getElementById('tir-edit-id').value;
+  const t=state.tireuses.find(x=>x.id===id);if(!t)return;
+  // Vérifier qu'elle n'est pas utilisée dans une commande à venir non rendue
+  const ts=todayStr();
+  const utilisee=state.commandes.some(c=>!c.retourFait && c.dateFin>=ts && cmdTireuses(c).some(x=>x.type==='inox'&&x.inoxId===id));
+  if(utilisee){
+    if(!confirm('⚠️ Cette tireuse est utilisée dans une commande en cours ou à venir. La supprimer quand même ?'))return;
+  }else{
+    if(!confirm(`Supprimer la tireuse ${id} ?`))return;
+  }
+  state.tireuses=state.tireuses.filter(x=>x.id!==id);
   save();closeModal('modal-tireuse');renderTireuses();
 }
 function addTireuse(){
