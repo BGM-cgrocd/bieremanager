@@ -97,6 +97,8 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 .wdd.has-event::after{content:'';width:4px;height:4px;background:var(--red-light);border-radius:50%;position:absolute;bottom:2px}
 /* Multi-bières commande */
 .biere-line{display:grid;grid-template-columns:1fr 80px 30px;gap:6px;align-items:center;margin-bottom:6px}
+.tir-line{display:grid;grid-template-columns:90px 1fr 30px;gap:6px;align-items:center;margin-bottom:6px}
+.tir-line-nb{display:grid;grid-template-columns:80px 1fr 26px;gap:5px;align-items:center;margin-bottom:6px}
 .biere-line-fmt{display:grid;grid-template-columns:1fr 68px 60px 26px;gap:5px;align-items:center;margin-bottom:6px}
 .biere-line-fmt .form-select,.biere-line-fmt .form-input{padding:9px 8px;font-size:13px}
 .remove-biere-btn{background:none;border:none;color:var(--red-light);font-size:18px;cursor:pointer;text-align:center}
@@ -395,11 +397,10 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
       <div class="form-group"><label class="form-label">Conso moy (fûts/mois)</label><input type="number" class="form-input" id="cl-conso" min="0" step="0.5" value="4"></div>
       <div class="form-group"><label class="form-label">Seuil rentabilité</label><input type="number" class="form-input" id="cl-seuil" min="0" step="0.5" value="3"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Bière habituelle</label>
-        <select class="form-select" id="cl-biere-hab"></select></div>
-      <div class="form-group"><label class="form-label">Fûts / livraison</label>
-        <input type="number" class="form-input" id="cl-futs-hab" min="1" value="1"></div>
+    <div class="form-group">
+      <label class="form-label">🍺 Bières habituelles (pré-remplissent les commandes)</label>
+      <div id="cl-bieres-lignes"></div>
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="addClientBiereLigne()">＋ Ajouter une bière</button>
     </div>
     <button class="btn btn-primary" onclick="saveClient()">✅ Sauvegarder</button>
     <button class="btn btn-secondary" onclick="closeModal('modal-client')">Annuler</button>
@@ -428,8 +429,24 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     </div>
     <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="tir-notes"></div>
     <button class="btn btn-primary" onclick="saveTireuse()">✅ Sauvegarder</button>
+    <button class="btn btn-secondary" onclick="openHistorique(document.getElementById('tir-edit-id').value)">📜 Voir l'historique</button>
     <button class="btn btn-danger" onclick="deleteTireuse()">🗑 Supprimer cette tireuse</button>
     <button class="btn btn-secondary" onclick="closeModal('modal-tireuse')">Annuler</button>
+  </div>
+</div>
+
+<!-- MODAL HISTORIQUE TIREUSE -->
+<div class="modal-overlay" id="modal-historique">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-historique')">✕</button>
+    <div class="modal-title" id="histo-title">📜 Historique</div>
+    <div id="histo-content"></div>
+    <div class="form-group" style="margin-top:14px">
+      <label class="form-label">➕ Ajouter une note datée (ex: entretien, réparation)</label>
+      <input type="text" class="form-input" id="histo-new" placeholder="Ex: Changement joint + nettoyage">
+    </div>
+    <button class="btn btn-primary" onclick="ajoutHistoManuel()">➕ Ajouter à l'historique</button>
+    <button class="btn btn-secondary" onclick="closeModal('modal-historique')">Fermer</button>
   </div>
 </div>
 
@@ -690,25 +707,42 @@ function cmdTireuses(c){
 }
 // Libellé court d'une tireuse de commande (pour les tags)
 function tirTag(t){
+  // Nouveau format : tirId précis
+  if(t.tirId){
+    const tir=state.tireuses.find(x=>x.id===t.tirId);
+    if(tir){
+      if(tir.type==='inox')return `${tir.id}${tir.debit?' ('+tir.debit+'L/h)':''}`;
+      return tir.id;
+    }
+    return t.tirId;
+  }
+  // Ancien format inox précise
   if(t.type==='inox'&&t.inoxId){
     const tir=state.tireuses.find(x=>x.id===t.inoxId);
-    if(tir)return `${t.nb}× ${tir.id}${tir.debit?' ('+tir.debit+'L/h)':''}`;
-    return `${t.nb}× inox`;
+    if(tir)return `${t.nb||1}× ${tir.id}${tir.debit?' ('+tir.debit+'L/h)':''}`;
+    return `${t.nb||1}× inox`;
   }
-  return `${t.nb}× ${t.type}`;
+  // Ancien format générique
+  return `${t.nb||1}× ${t.type}`;
 }
 // Libellé d'une ligne de bière commandée (avec format si présent)
 function biereTag(b){
   return b.format?`${b.nb}× ${b.format} La ${b.biere}`:`${b.nb}× La ${b.biere}`;
 }
-// Tireuses attribuées à un client fixe (nouveau format tableau, ou ancien champ unique)
+// Tireuses attribuées à un client fixe — normalisées en {tirId, type}
 function clientTireuses(c){
-  if(Array.isArray(c.tireuses))return c.tireuses;
-  if(c.tireuse){ // ancien format : un type générique unique
-    if(c.tireuse==='inox')return [{type:'inox'}]; // inox non précise (ancien)
-    return [{type:c.tireuse}];
+  let raw=[];
+  if(Array.isArray(c.tireuses))raw=c.tireuses;
+  else if(c.tireuse){ // très ancien format : type générique unique
+    raw=[c.tireuse==='inox'?{type:'inox'}:{type:c.tireuse}];
   }
-  return [];
+  // Normaliser chaque entrée
+  return raw.map(t=>{
+    if(t.tirId){const tir=state.tireuses.find(x=>x.id===t.tirId);return {tirId:t.tirId,type:tir?tir.type:(t.type||'')};}
+    if(t.type==='inox'&&t.inoxId)return {tirId:t.inoxId,type:'inox'};
+    // ancien type générique sans ID précis (10L/3L) — pas d'ID → on garde juste le type
+    return {tirId:null,type:t.type};
+  });
 }
 
 // Nombre de tireuses d'un type bloquées chez des clients fixes
@@ -717,12 +751,13 @@ function tireusesChezClients(type){
   state.clients.forEach(c=>{clientTireuses(c).forEach(t=>{if(t.type===type)n++;});});
   return n;
 }
-// Une tireuse inox précise est-elle attribuée à un client fixe ?
-function inoxChezClient(inoxId){
-  return state.clients.some(c=>clientTireuses(c).some(t=>t.type==='inox'&&t.inoxId===inoxId));
+// Une tireuse précise (par ID) est-elle attribuée à un client fixe ?
+function tireuseChezClient(tirId){
+  return state.clients.some(c=>clientTireuses(c).some(t=>t.tirId===tirId));
 }
-function clientDeTireuse(inoxId){
-  const c=state.clients.find(c=>clientTireuses(c).some(t=>t.type==='inox'&&t.inoxId===inoxId));
+function inoxChezClient(inoxId){return tireuseChezClient(inoxId);}
+function clientDeTireuse(tirId){
+  const c=state.clients.find(c=>clientTireuses(c).some(t=>t.tirId===tirId));
   return c?c.nom:null;
 }
 
@@ -742,7 +777,7 @@ function tirDispo(type,debut,fin,excludeId=null){
 function inoxLibre(inoxId,debut,fin,excludeId=null){
   const t=state.tireuses.find(x=>x.id===inoxId);
   if(!t||t.etat!=='ok')return false;
-  if(inoxChezClient(inoxId))return false; // bloquée chez un client fixe
+  if(tireuseChezClient(inoxId))return false; // bloquée chez un client fixe
   for(const c of state.commandes){
     if(c.id===excludeId)continue;
     if(c.dateDebut<=fin&&c.dateFin>=debut){
@@ -827,16 +862,16 @@ function renderDashboard(){
     (c.bieres||[{biere:c.biere,nb:c.nbFuts}]).forEach(b=>{if(certain[b.biere]!==undefined)certain[b.biere]+=b.nb;});
   });
 
-  // 2) Clients fixes sans commande déjà enregistrée sur l'horizon (prévisionnel)
-  // Estimation : conso mensuelle ramenée à l'horizon, selon fréquence
+  // 2) Clients fixes : prévisionnel selon leurs bières habituelles
   state.clients.forEach(cl=>{
-    if(!cl.biereHabituelle||prevision[cl.biereHabituelle]===undefined)return;
-    // Nombre de livraisons prévues sur l'horizon selon la fréquence (en semaines)
     const freqSem=parseInt(cl.freq)||0;
     if(freqSem===0)return; // "à la demande" = pas de prévision
     const nbLivraisons=Math.floor((horizon/7)/freqSem);
-    const futsParLivraison=cl.futsHabituels||Math.ceil((cl.consoMoy||0)/ (4/ (freqSem||1)) )||1;
-    prevision[cl.biereHabituelle]+=nbLivraisons*futsParLivraison;
+    if(nbLivraisons<=0)return;
+    clientBieres(cl).forEach(b=>{
+      if(prevision[b.biere]===undefined)return;
+      prevision[b.biere]+=nbLivraisons*(b.nb||1);
+    });
   });
 
   // 3) Comparer aux stocks
@@ -922,7 +957,7 @@ function editCommande(id){
   document.getElementById('bieres-lignes').innerHTML='';
   bieres.forEach(b=>addBiereLigne(b.biere,b.nb,b.format||'10L'));
   document.getElementById('tireuses-lignes').innerHTML='';
-  cmdTireuses(c).forEach(t=>addTireuseLigne(t.type,t.nb,t.inoxId));
+  cmdTireuses(c).forEach(t=>addTireuseLigne(t.type||null,1,t.tirId||t.inoxId||null));
   document.getElementById('modal-cmd').classList.add('open');
 }
 
@@ -946,7 +981,7 @@ function dupliquerCommande(id){
   document.getElementById('bieres-lignes').innerHTML='';
   bieres.forEach(b=>addBiereLigne(b.biere,b.nb,b.format||'10L'));
   document.getElementById('tireuses-lignes').innerHTML='';
-  cmdTireuses(c).forEach(t=>addTireuseLigne(t.type,t.nb,t.inoxId));
+  cmdTireuses(c).forEach(t=>addTireuseLigne(t.type||null,1,t.tirId||t.inoxId||null));
   document.getElementById('modal-cmd').classList.add('open');
 }
 
@@ -1139,10 +1174,18 @@ function renderClients(){
       ${(()=>{const tirs=clientTireuses(c);if(!tirs.length)return '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">🚰 Aucune tireuse attribuée</div>';
         return '<div style="margin-top:6px"><div style="font-size:11px;color:var(--amber-light);font-weight:700;margin-bottom:3px">🚰 Tireuse(s) sur place :</div>'+
         tirs.map(t=>{
-          if(t.type==='inox'&&t.inoxId){const tir=state.tireuses.find(x=>x.id===t.inoxId);
-            return `<div style="font-size:12px;background:var(--card);border-radius:6px;padding:5px 8px;margin-bottom:3px">🔧 ${t.inoxId}${tir&&tir.debit?' ('+tir.debit+'L/h)':''}${tir&&tir.etat!=='ok'?' <span style="color:var(--red-light)">'+(tir.etat==='panne'?'🔴 panne':'🔧 entretien')+'</span>':''}</div>`;}
-          return `<div style="font-size:12px;background:var(--card);border-radius:6px;padding:5px 8px;margin-bottom:3px">🚰 Tireuse ${t.type}</div>`;
+          const tir=t.tirId?state.tireuses.find(x=>x.id===t.tirId):null;
+          if(tir){
+            const detail=tir.type==='inox'&&tir.debit?' ('+tir.debit+'L/h)':'';
+            const etat=tir.etat!=='ok'?' <span style="color:var(--red-light)">'+(tir.etat==='panne'?'🔴 panne':'🔧 entretien')+'</span>':'';
+            return `<div style="font-size:12px;background:var(--card);border-radius:6px;padding:5px 8px;margin-bottom:3px">🔧 ${tir.id}${detail}${etat}</div>`;
+          }
+          return `<div style="font-size:12px;background:var(--card);border-radius:6px;padding:5px 8px;margin-bottom:3px">🚰 Tireuse ${t.type||'?'}</div>`;
         }).join('')+'</div>';
+      })()}
+      ${(()=>{const brs=clientBieres(c);if(!brs.length)return '';
+        return '<div style="margin-top:6px"><div style="font-size:11px;color:var(--amber-light);font-weight:700;margin-bottom:3px">🍺 Bières habituelles :</div><div class="tags">'+
+        brs.map(b=>`<span class="tag tag-fut">${b.nb||1}× ${b.format||'10L'} La ${b.biere}</span>`).join('')+'</div></div>';
       })()}
       <div class="client-stats">
         <div class="client-stat"><div class="client-stat-val">${c.consoMoy}</div><div class="client-stat-label">fûts/mois</div></div>
@@ -1158,43 +1201,73 @@ function renderClients(){
   }).join(''):'<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucun client — appuie sur +</div>';
 }
 
-function fillBiereHabSelect(selected){
-  const el=document.getElementById('cl-biere-hab');
-  el.innerHTML=state.bieres.map(b=>`<option value="${b}" ${b===selected?'selected':''}>La ${b}</option>`).join('');
+// Ligne de bière habituelle pour un client (bière + format + nb fûts)
+function addClientBiereLigne(biere=null,format='10L',nb=1){
+  const bOpts=state.bieres.map(b=>`<option value="${b}" ${b===biere?'selected':''}>La ${b}</option>`).join('');
+  const fOpts=FORMATS.map(f=>`<option value="${f}" ${f===format?'selected':''}>${f}</option>`).join('');
+  const div=document.createElement('div');
+  div.className='biere-line-fmt';
+  div.innerHTML=`<select class="form-select biere-sel">${bOpts}</select>
+    <select class="form-select fmt-sel">${fOpts}</select>
+    <input type="number" class="form-input" min="1" value="${nb}" placeholder="Nb">
+    <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('cl-bieres-lignes').appendChild(div);
+}
+function getClientBieresLignes(){
+  return [...document.querySelectorAll('#cl-bieres-lignes .biere-line-fmt')].map(div=>{
+    const biere=div.querySelector('.biere-sel').value;
+    const format=div.querySelector('.fmt-sel').value;
+    const nb=parseInt(div.querySelector('input').value)||1;
+    return {biere,format,nb};
+  }).filter(b=>b.nb>0);
+}
+// Bières habituelles normalisées (nouveau tableau OU ancien champ unique)
+function clientBieres(c){
+  if(Array.isArray(c.bieresHab))return c.bieresHab;
+  if(c.biereHabituelle)return [{biere:c.biereHabituelle,format:'10L',nb:c.futsHabituels||1}];
+  return [];
 }
 // Ligne de tireuse pour un client fixe (type générique OU inox précise)
-function addClientTireuseLigne(type=null,inoxId=null){
-  let opts='<option value="">— aucune —</option>';
-  opts+='<option value="10L"'+(type==='10L'?' selected':'')+'>Tireuse 10L</option>';
-  opts+='<option value="3L"'+(type==='3L'?' selected':'')+'>Tireuse 3L</option>';
-  state.tireuses.filter(t=>t.type==='inox').forEach(t=>{
-    const val=`inox::${t.id}`;
-    const isSel=(type==='inox'&&inoxId===t.id);
-    opts+=`<option value="${val}"${isSel?' selected':''}>${libelleInox(t)}</option>`;
-  });
+function addClientTireuseLigne(sel=null){
+  // sel = {tirId} ou ancien {type,inoxId}
+  let selType='',selId='';
+  if(sel){
+    if(sel.tirId){selId=sel.tirId;const t=state.tireuses.find(x=>x.id===selId);selType=t?t.type:'';}
+    else if(sel.type){selType=sel.type;selId=sel.inoxId||'';}
+  }
+  const typeOpts=`<option value="">— type —</option>
+    <option value="10L"${selType==='10L'?' selected':''}>10L</option>
+    <option value="3L"${selType==='3L'?' selected':''}>3L</option>
+    <option value="inox"${selType==='inox'?' selected':''}>Inox</option>`;
+  const nomOpts=selType?optionsNomTireuse(selType,selId,'client'):'<option value="">— choisir type d\'abord —</option>';
   const div=document.createElement('div');
-  div.className='biere-line';
-  div.style.gridTemplateColumns='1fr 30px';
-  div.innerHTML=`<select class="form-select">${opts}</select>
+  div.className='tir-line';
+  div.innerHTML=`<select class="form-select tir-type" onchange="onClientTypeChange(this)">${typeOpts}</select>
+    <select class="form-select tir-nom">${nomOpts}</select>
     <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove()">✕</button>`;
   document.getElementById('cl-tireuses-lignes').appendChild(div);
 }
+function onClientTypeChange(sel){
+  const line=sel.parentElement;
+  const type=sel.value;
+  const nomSel=line.querySelector('.tir-nom');
+  nomSel.innerHTML=type?optionsNomTireuse(type,null,'client'):'<option value="">— choisir type d\'abord —</option>';
+}
 function getClientTireusesLignes(){
-  return [...document.querySelectorAll('#cl-tireuses-lignes .biere-line')].map(div=>{
-    const v=div.querySelector('select').value;
-    if(!v)return null;
-    if(v.startsWith('inox::'))return {type:'inox',inoxId:v.split('::')[1]};
-    return {type:v};
+  return [...document.querySelectorAll('#cl-tireuses-lignes .tir-line')].map(div=>{
+    const tirId=div.querySelector('.tir-nom').value;
+    if(!tirId)return null;
+    return {tirId};
   }).filter(t=>t);
 }
 function openClientModal(){
   document.getElementById('modal-client-title').textContent='Nouveau client';
   document.getElementById('cl-edit-id').value='';
   ['cl-nom','cl-conso','cl-seuil'].forEach(id=>{document.getElementById(id).value=id==='cl-nom'?'':id==='cl-conso'?'4':'3';});
-  fillBiereHabSelect(state.bieres[0]);
-  document.getElementById('cl-futs-hab').value=1;
   document.getElementById('cl-tireuses-lignes').innerHTML='';
   addClientTireuseLigne();
+  document.getElementById('cl-bieres-lignes').innerHTML='';
+  addClientBiereLigne();
   document.getElementById('modal-client').classList.add('open');
 }
 function editClient(id){
@@ -1206,29 +1279,46 @@ function editClient(id){
   document.getElementById('cl-conso').value=c.consoMoy;
   document.getElementById('cl-seuil').value=c.seuil;
   document.getElementById('cl-freq').value=c.freq;
-  fillBiereHabSelect(c.biereHabituelle||state.bieres[0]);
-  document.getElementById('cl-futs-hab').value=c.futsHabituels||1;
-  // Tireuses assignées (nouveau format tableau, ou ancien champ unique)
+  // Tireuses assignées
   document.getElementById('cl-tireuses-lignes').innerHTML='';
   const tirs=clientTireuses(c);
-  if(tirs.length)tirs.forEach(t=>addClientTireuseLigne(t.type,t.inoxId));
+  if(tirs.length)tirs.forEach(t=>addClientTireuseLigne(t));
   else addClientTireuseLigne();
+  // Bières habituelles
+  document.getElementById('cl-bieres-lignes').innerHTML='';
+  const brs=clientBieres(c);
+  if(brs.length)brs.forEach(b=>addClientBiereLigne(b.biere,b.format||'10L',b.nb||1));
+  else addClientBiereLigne();
   document.getElementById('modal-client').classList.add('open');
 }
 function saveClient(){
   const nom=document.getElementById('cl-nom').value.trim();if(!nom)return;
   const eid=document.getElementById('cl-edit-id').value;
+  const idNum=eid?parseInt(eid):-1;
   const tireuses=getClientTireusesLignes();
-  // Vérifier qu'une inox précise n'est pas déjà chez un autre client
+  const bieresHab=getClientBieresLignes();
+  // Vérifier qu'une tireuse n'est pas déjà chez un AUTRE client
   for(const t of tireuses){
-    if(t.type==='inox'&&t.inoxId){
-      const autre=state.clients.find(c=>c.id!==(eid?parseInt(eid):-1)&&clientTireuses(c).some(x=>x.type==='inox'&&x.inoxId===t.inoxId));
-      if(autre){alert(`⚠️ La tireuse ${t.inoxId} est déjà attribuée à ${autre.nom}.`);return;}
-    }
+    const autre=state.clients.find(c=>c.id!==idNum&&clientTireuses(c).some(x=>x.tirId===t.tirId));
+    if(autre){alert(`⚠️ La tireuse ${t.tirId} est déjà attribuée à ${autre.nom}.`);return;}
   }
-  const obj={id:eid?parseInt(eid):state.nextId++,nom,type:document.getElementById('cl-type').value,tireuses,consoMoy:parseFloat(document.getElementById('cl-conso').value)||0,seuil:parseFloat(document.getElementById('cl-seuil').value)||3,freq:document.getElementById('cl-freq').value,biereHabituelle:document.getElementById('cl-biere-hab').value,futsHabituels:parseInt(document.getElementById('cl-futs-hab').value)||1};
+  // Historique : comparer anciennes et nouvelles tireuses
+  const ancien=idNum>0?state.clients.find(c=>c.id===idNum):null;
+  const ancTirs=ancien?clientTireuses(ancien).map(t=>t.tirId).filter(Boolean):[];
+  const nouvTirs=tireuses.map(t=>t.tirId);
+  nouvTirs.forEach(tid=>{if(!ancTirs.includes(tid))ajoutHistorique(tid,`📍 Mise à disposition chez ${nom}`);});
+  ancTirs.forEach(tid=>{if(!nouvTirs.includes(tid))ajoutHistorique(tid,`↩️ Retour de chez ${nom}`);});
+
+  const obj={id:eid?parseInt(eid):state.nextId++,nom,type:document.getElementById('cl-type').value,tireuses,bieresHab,consoMoy:parseFloat(document.getElementById('cl-conso').value)||0,seuil:parseFloat(document.getElementById('cl-seuil').value)||3,freq:document.getElementById('cl-freq').value};
   if(eid)state.clients=state.clients.map(c=>c.id===parseInt(eid)?obj:c);else state.clients.push(obj);
   save();closeModal('modal-client');renderClients();
+}
+// Ajoute une entrée à l'historique d'une tireuse
+function ajoutHistorique(tirId,texte){
+  const t=state.tireuses.find(x=>x.id===tirId);
+  if(!t)return;
+  if(!t.historique)t.historique=[];
+  t.historique.push({date:todayStr(),texte});
 }
 function deleteClient(id){if(!confirm('Retirer ce client ?'))return;state.clients=state.clients.filter(c=>c.id!==id);save();renderClients();}
 
@@ -1245,12 +1335,10 @@ function renderTireuses(){
       ${label} — ${ok} op. / ${ts.filter(t=>t.etat==='panne').length} panne / ${ts.filter(t=>t.etat==='entretien').length} entretien</div>`;
     ts.forEach(t=>{
       const icon=t.etat==='ok'?'✅':t.etat==='panne'?'🔴':'🔧';
-      // Où est la tireuse ? (chez un client fixe = maintenance)
+      // Où est la tireuse ? (chez un client fixe = maintenance) — pour tous les types
       let localisation='';
-      if(type==='inox'){
-        const chez=clientDeTireuse(t.id);
-        if(chez)localisation=`<span style="color:#64B5F6;font-weight:600"> 📍 chez ${chez}</span>`;
-      }
+      const chez=clientDeTireuse(t.id);
+      if(chez)localisation=`<span style="color:#64B5F6;font-weight:600"> 📍 ${chez}</span>`;
       // Détails pour inox : becs, débit, compresseur
       let details='';
       if(type==='inox'){
@@ -1261,8 +1349,12 @@ function renderTireuses(){
       }else if(t.notes){
         details=`<div class="row-sub">${t.notes}</div>`;
       }
+      const nbHisto=(t.historique||[]).length;
       html+=`<div class="row"><div><div class="row-name">${icon} ${t.id}${localisation}</div>${details}</div>
-        <button class="btn btn-secondary btn-sm" onclick="openEditTireuse('${t.id}')">✏️</button></div>`;
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-secondary btn-sm" onclick="openHistorique('${t.id}')" title="Historique">📜${nbHisto?' '+nbHisto:''}</button>
+          <button class="btn btn-secondary btn-sm" onclick="openEditTireuse('${t.id}')">✏️</button>
+        </div></div>`;
     });
     html+='</div>';
   });
@@ -1288,22 +1380,38 @@ function saveTireuse(){
   const oldId=document.getElementById('tir-edit-id').value;
   const t=state.tireuses.find(x=>x.id===oldId);if(!t)return;
   const newId=document.getElementById('tir-id').value.trim()||oldId;
-  // Vérifier que le nouveau nom n'existe pas déjà (sauf si c'est le même)
   if(newId!==oldId && state.tireuses.some(x=>x.id===newId)){
     alert('⚠️ Une tireuse porte déjà ce nom. Choisis un nom différent.');return;
   }
-  const patch={id:newId,etat:document.getElementById('tir-etat').value,notes:document.getElementById('tir-notes').value};
+  const nouvelEtat=document.getElementById('tir-etat').value;
+  // Historique : changement d'état
+  if(nouvelEtat!==t.etat){
+    const lib={ok:'✅ Remise en service',panne:'🔴 Mise en panne',entretien:'🔧 Mise en entretien'};
+    ajoutHistorique(oldId,lib[nouvelEtat]||('État: '+nouvelEtat));
+  }
+  const patch={id:newId,etat:nouvelEtat,notes:document.getElementById('tir-notes').value};
   if(t.type==='inox'){
     patch.becs=parseInt(document.getElementById('tir-becs').value)||1;
     patch.debit=document.getElementById('tir-debit').value.trim();
     patch.compresseur=document.getElementById('tir-compresseur').value==='oui';
   }
   state.tireuses=state.tireuses.map(x=>x.id===oldId?{...x,...patch}:x);
-  // Si l'ID a changé, répercuter dans les commandes qui référencent cette tireuse inox
+  // Si l'ID a changé, répercuter partout (commandes + clients)
   if(newId!==oldId){
     state.commandes.forEach(c=>{
       if(Array.isArray(c.tireuses)){
-        c.tireuses.forEach(tt=>{if(tt.type==='inox'&&tt.inoxId===oldId)tt.inoxId=newId;});
+        c.tireuses.forEach(tt=>{
+          if(tt.tirId===oldId)tt.tirId=newId;
+          if(tt.inoxId===oldId)tt.inoxId=newId;
+        });
+      }
+    });
+    state.clients.forEach(c=>{
+      if(Array.isArray(c.tireuses)){
+        c.tireuses.forEach(tt=>{
+          if(tt.tirId===oldId)tt.tirId=newId;
+          if(tt.inoxId===oldId)tt.inoxId=newId;
+        });
       }
     });
   }
@@ -1312,10 +1420,12 @@ function saveTireuse(){
 function deleteTireuse(){
   const id=document.getElementById('tir-edit-id').value;
   const t=state.tireuses.find(x=>x.id===id);if(!t)return;
-  // Vérifier qu'elle n'est pas utilisée dans une commande à venir non rendue
   const ts=todayStr();
-  const utilisee=state.commandes.some(c=>!c.retourFait && c.dateFin>=ts && cmdTireuses(c).some(x=>x.type==='inox'&&x.inoxId===id));
-  if(utilisee){
+  const utilisee=state.commandes.some(c=>!c.retourFait && c.dateFin>=ts && cmdTireuses(c).some(x=>x.tirId===id||x.inoxId===id));
+  const chezClient=clientDeTireuse(id);
+  if(chezClient){
+    if(!confirm(`⚠️ Cette tireuse est chez ${chezClient}. La supprimer quand même ?`))return;
+  }else if(utilisee){
     if(!confirm('⚠️ Cette tireuse est utilisée dans une commande en cours ou à venir. La supprimer quand même ?'))return;
   }else{
     if(!confirm(`Supprimer la tireuse ${id} ?`))return;
@@ -1323,6 +1433,40 @@ function deleteTireuse(){
   state.tireuses=state.tireuses.filter(x=>x.id!==id);
   save();closeModal('modal-tireuse');renderTireuses();
 }
+
+// ===== HISTORIQUE TIREUSE =====
+function openHistorique(id){
+  const t=state.tireuses.find(x=>x.id===id);if(!t)return;
+  document.getElementById('histo-title').textContent=`📜 Historique — ${t.id}`;
+  const histo=(t.historique||[]).slice().reverse(); // plus récent en haut
+  let html='';
+  // Position actuelle
+  const chez=clientDeTireuse(id);
+  if(chez)html+=`<div class="alert alert-blue" style="font-size:12px">📍 Actuellement chez ${chez}</div>`;
+  else html+=`<div class="alert alert-green" style="font-size:12px">📍 Actuellement au dépôt</div>`;
+  if(!histo.length){
+    html+='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">Aucun événement enregistré</div>';
+  }else{
+    html+=histo.map(h=>`<div style="border-left:3px solid var(--amber);padding:6px 10px;margin-bottom:6px;background:var(--dark2);border-radius:0 6px 6px 0">
+      <div style="font-size:11px;color:var(--text-muted)">${fmtDate(h.date)}</div>
+      <div style="font-size:13px">${h.texte}</div>
+    </div>`).join('');
+  }
+  document.getElementById('histo-content').innerHTML=html;
+  document.getElementById('histo-new').value='';
+  document.getElementById('histo-new').dataset.tirid=id;
+  document.getElementById('modal-tireuse').classList.remove('open');
+  document.getElementById('modal-historique').classList.add('open');
+}
+function ajoutHistoManuel(){
+  const id=document.getElementById('histo-new').dataset.tirid;
+  const texte=document.getElementById('histo-new').value.trim();
+  if(!texte)return;
+  ajoutHistorique(id,'🔧 '+texte);
+  save();
+  openHistorique(id); // rafraîchir
+}
+
 function addTireuse(){
   const type=document.getElementById('new-t-type').value;
   const same=state.tireuses.filter(t=>t.type===type);
@@ -1484,7 +1628,7 @@ function openCmdModal(){
     state.clients.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
   sel.value='';
   addBiereLigne();
-  addTireuseLigne('10L',1);
+  addTireuseLigne();
   document.getElementById('modal-cmd').classList.add('open');
 }
 
@@ -1494,17 +1638,18 @@ function applyClientFixe(){
   const c=state.clients.find(x=>x.id===parseInt(id));
   if(!c)return;
   document.getElementById('cmd-client').value=c.nom;
-  // Un client fixe a déjà ses tireuses sur place → commande = fûts seuls (pas de nouvelle tireuse)
+  // Un client fixe a déjà ses tireuses sur place → commande = fûts seuls
   document.getElementById('tireuses-lignes').innerHTML='';
-  // Bière habituelle si définie
-  if(c.biereHabituelle){
+  // Bières habituelles (toutes)
+  const brs=clientBieres(c);
+  if(brs.length){
     document.getElementById('bieres-lignes').innerHTML='';
-    addBiereLigne(c.biereHabituelle, c.futsHabituels||1);
+    brs.forEach(b=>addBiereLigne(b.biere,b.nb||1,b.format||'10L'));
   }
   // Info : rappeler quelles tireuses il a déjà
   const tirs=clientTireuses(c);
   if(tirs.length){
-    const noms=tirs.map(t=>t.type==='inox'&&t.inoxId?t.inoxId:'Tireuse '+t.type).join(', ');
+    const noms=tirs.map(t=>t.tirId||('Tireuse '+t.type)).join(', ');
     document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-blue" style="font-size:12px">ℹ️ ${c.nom} a déjà sur place : ${noms}</div>`;
   }
 }
@@ -1535,37 +1680,74 @@ function libelleInox(t){
   const debit=t.debit?`${t.debit}L/h`:'débit ?';
   return `${t.id} (${becs}, ${debit})`;
 }
-
-function addTireuseLigne(type=null,nb=1,inoxId=null){
-  // Construit les options : 10L, 3L, puis chaque tireuse inox individuellement
-  let opts='<option value="10L"'+(type==='10L'?' selected':'')+'>Tireuse 10L</option>';
-  opts+='<option value="3L"'+(type==='3L'?' selected':'')+'>Tireuse 3L</option>';
-  // Chaque tireuse inox = une option distincte (valeur = "inox::ID")
-  // On exclut celles attribuées en permanence à un client fixe (sauf si c'est celle déjà sélectionnée)
-  state.tireuses.filter(t=>t.type==='inox').forEach(t=>{
-    const chezClient=inoxChezClient(t.id);
-    if(chezClient && !(type==='inox'&&inoxId===t.id))return; // masquée car chez un client
-    const val=`inox::${t.id}`;
-    const isSel=(type==='inox'&&inoxId===t.id);
-    opts+=`<option value="${val}"${isSel?' selected':''}>${libelleInox(t)}</option>`;
+// Libellé court d'une tireuse (pour les menus "nom")
+function libelleTireuse(t){
+  if(t.type==='inox')return libelleInox(t);
+  return t.id; // 10L / 3L : juste le nom (T10-01...)
+}
+// Options du menu "nom de tireuse" pour un type donné.
+// excludeUsed: liste d'IDs à retenir même si occupés (ex: la sélection courante)
+// contexte: 'client' (exclut celles déjà chez un client) ou 'commande'
+function optionsNomTireuse(type,selectedId,contexte){
+  let opts='<option value="">— choisir —</option>';
+  state.tireuses.filter(t=>t.type===type).forEach(t=>{
+    let dispo=true;
+    if(contexte==='client'){
+      const chez=clientDeTireuse(t.id);
+      if(chez && t.id!==selectedId)dispo=false;
+    }
+    if(!dispo && t.id!==selectedId)return;
+    const sel=t.id===selectedId?' selected':'';
+    const etat=t.etat==='panne'?' 🔴':t.etat==='entretien'?' 🔧':'';
+    opts+=`<option value="${t.id}"${sel}>${libelleTireuse(t)}${etat}</option>`;
   });
+  return opts;
+}
+
+
+// Options nom de tireuse pour une COMMANDE (exclut celles chez un client fixe)
+function optionsNomTireuseCmd(type,selectedId){
+  let opts='<option value="">— choisir —</option>';
+  state.tireuses.filter(t=>t.type===type).forEach(t=>{
+    // Exclure celles attribuées à un client fixe (sauf la sélection courante)
+    if(clientDeTireuse(t.id) && t.id!==selectedId)return;
+    const sel=t.id===selectedId?' selected':'';
+    const etat=t.etat==='panne'?' 🔴':t.etat==='entretien'?' 🔧':'';
+    opts+=`<option value="${t.id}"${sel}>${libelleTireuse(t)}${etat}</option>`;
+  });
+  return opts;
+}
+
+function addTireuseLigne(type=null,nb=1,tirId=null){
+  // Si on reçoit un tirId, retrouver son type
+  if(tirId&&!type){const t=state.tireuses.find(x=>x.id===tirId);if(t)type=t.type;}
+  const typeOpts=`<option value="">— type —</option>
+    <option value="10L"${type==='10L'?' selected':''}>10L</option>
+    <option value="3L"${type==='3L'?' selected':''}>3L</option>
+    <option value="inox"${type==='inox'?' selected':''}>Inox</option>`;
+  const nomOpts=type?optionsNomTireuseCmd(type,tirId):'<option value="">— type d\'abord —</option>';
   const div=document.createElement('div');
-  div.className='biere-line';
-  div.innerHTML=`<select class="form-select">${opts}</select>
-    <input type="number" class="form-input" min="1" value="${nb}" placeholder="Nb">
+  div.className='tir-line-nb';
+  div.innerHTML=`<select class="form-select tir-type" onchange="onCmdTypeChange(this)">${typeOpts}</select>
+    <select class="form-select tir-nom">${nomOpts}</select>
     <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove()">✕</button>`;
   document.getElementById('tireuses-lignes').appendChild(div);
 }
+function onCmdTypeChange(sel){
+  const line=sel.parentElement;
+  const type=sel.value;
+  const nomSel=line.querySelector('.tir-nom');
+  nomSel.innerHTML=type?optionsNomTireuseCmd(type,null):'<option value="">— type d\'abord —</option>';
+}
 
 function getTireusesLignes(){
-  return [...document.querySelectorAll('#tireuses-lignes .biere-line')].map(div=>{
-    const sel=div.querySelector('select'),inp=div.querySelector('input');
-    const nb=parseInt(inp.value)||1;
-    if(sel.value.startsWith('inox::')){
-      return {type:'inox',inoxId:sel.value.split('::')[1],nb};
-    }
-    return {type:sel.value,nb};
-  }).filter(t=>t.nb>0);
+  return [...document.querySelectorAll('#tireuses-lignes .tir-line-nb')].map(div=>{
+    const tirId=div.querySelector('.tir-nom').value;
+    if(!tirId)return null;
+    const t=state.tireuses.find(x=>x.id===tirId);
+    // On stocke le type + l'ID précis (pour tous les types maintenant)
+    return {type:t?t.type:'',tirId,inoxId:t&&t.type==='inox'?tirId:undefined,nb:1};
+  }).filter(t=>t);
 }
 
 function saveCommande(){
@@ -1582,27 +1764,35 @@ function saveCommande(){
   if(dateFin<dateDebut){document.getElementById('cmd-alerte').innerHTML='<div class="alert alert-red">⚠️ Date retour avant date début</div>';return;}
   if(!bieres.length){document.getElementById('cmd-alerte').innerHTML='<div class="alert alert-red">⚠️ Ajoute au moins une bière</div>';return;}
 
-  // Vérif dispo : tireuses inox précises + types génériques 10L/3L
+  // Vérif dispo : chaque tireuse est maintenant précise (tirId), réservable une seule fois
   const eidNum=eid?parseInt(eid):null;
-  // 1) Inox précises : chacune ne peut être réservée qu'une fois
-  const inoxDemandees=tireuses.filter(t=>t.type==='inox'&&t.inoxId);
   const dejaVues={};
-  for(const t of inoxDemandees){
-    if(dejaVues[t.inoxId]){
-      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 La tireuse ${t.inoxId} est en double dans la commande</div>`;return;
+  for(const t of tireuses){
+    if(!t.tirId)continue;
+    if(dejaVues[t.tirId]){
+      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 La tireuse ${t.tirId} est en double dans la commande</div>`;return;
     }
-    dejaVues[t.inoxId]=true;
-    if(!inoxLibre(t.inoxId,dateDebut,dateFin,eidNum)){
-      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 La tireuse ${t.inoxId} est déjà réservée sur cette période</div>`;return;
+    dejaVues[t.tirId]=true;
+    // Chez un client fixe ?
+    const chez=clientDeTireuse(t.tirId);
+    if(chez){
+      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 La tireuse ${t.tirId} est chez ${chez} (client fixe)</div>`;return;
     }
-  }
-  // 2) Types génériques 10L / 3L
-  const besoinParType={};
-  tireuses.forEach(t=>{if(t.type!=='inox')besoinParType[t.type]=(besoinParType[t.type]||0)+t.nb;});
-  for(const type in besoinParType){
-    const dispo=tirDispo(type,dateDebut,dateFin,eidNum);
-    if(dispo<besoinParType[type]){
-      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 Seulement ${dispo} tireuse(s) ${type} disponible(s) sur cette période (${besoinParType[type]} demandée(s)) !</div>`;return;
+    // Déjà réservée sur la période ?
+    let occupee=false;
+    for(const c of state.commandes){
+      if(c.id===eidNum)continue;
+      if(c.dateDebut<=dateFin&&c.dateFin>=dateDebut){
+        if(cmdTireuses(c).some(x=>x.tirId===t.tirId))occupee=true;
+      }
+    }
+    if(occupee){
+      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-red">🚨 La tireuse ${t.tirId} est déjà réservée sur cette période</div>`;return;
+    }
+    // État panne/entretien ?
+    const tir=state.tireuses.find(x=>x.id===t.tirId);
+    if(tir&&tir.etat!=='ok'){
+      document.getElementById('cmd-alerte').innerHTML=`<div class="alert alert-orange">⚠️ La tireuse ${t.tirId} est en ${tir.etat==='panne'?'panne':'entretien'}. Choisis-en une autre ou vérifie son état.</div>`;return;
     }
   }
 
@@ -1621,6 +1811,10 @@ function saveCommande(){
   document.getElementById('cmd-alerte').dataset.confirmed='';
 
   const obj={id:eid?parseInt(eid):state.nextId++,client,dateDebut,dateFin,tireuses,bieres,livraison,notes,retourFait:false};
+  // Historique : journaliser l'usage des tireuses (nouvelle commande seulement)
+  if(!eid){
+    tireuses.forEach(t=>{if(t.tirId)ajoutHistorique(t.tirId,`🍺 Commande ${client} (${fmtDate(dateDebut)}→${fmtDate(dateFin)})`);});
+  }
   if(eid)state.commandes=state.commandes.map(c=>c.id===parseInt(eid)?obj:c);
   else state.commandes.push(obj);
   save();closeModal('modal-cmd');renderCommandes();renderDashboard();
