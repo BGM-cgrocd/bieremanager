@@ -478,6 +478,42 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
   </div>
 </div>
 
+<!-- MODAL RECETTE -->
+<div class="modal-overlay" id="modal-recette">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-recette')">✕</button>
+    <div class="modal-title" id="rec-modal-title">Nouvelle recette</div>
+    <input type="hidden" id="rec-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nom de la recette</label><input type="text" class="form-input" id="rec-nom" placeholder="Ex: IPA Amarillo"></div>
+      <div class="form-group"><label class="form-label">Bière</label><select class="form-select" id="rec-biere"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Volume de base (L)</label><input type="number" class="form-input" id="rec-volume" min="1" value="1000"></div>
+      <div class="form-group"><label class="form-label">Réf. fiche</label><input type="text" class="form-input" id="rec-ref" placeholder="Ex: FB2026-1"></div>
+    </div>
+
+    <!-- Étapes chronologiques (générées par JS, paliers inclus après empâtage) -->
+    <div id="rec-etapes"></div>
+
+    <!-- Densités -->
+    <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:14px 0 6px">📊 Densités & ébullition</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Densité avant ébu.</label><input type="text" class="form-input" id="rec-dens-avant" placeholder="1.054"></div>
+      <div class="form-group"><label class="form-label">Densité initiale</label><input type="text" class="form-input" id="rec-dens-init" placeholder="1.056"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Densité finale</label><input type="text" class="form-input" id="rec-dens-finale" placeholder="1.011"></div>
+      <div class="form-group"><label class="form-label">Durée ébullition</label><input type="text" class="form-input" id="rec-ebullition" placeholder="75 min"></div>
+    </div>
+
+    <div id="rec-cout" style="margin:12px 0"></div>
+    <button class="btn btn-primary" onclick="saveRecette()">✅ Sauvegarder la recette</button>
+    <button class="btn btn-danger" id="rec-delete-btn" onclick="deleteRecetteFromModal()">🗑 Supprimer</button>
+    <button class="btn btn-secondary" onclick="closeModal('modal-recette')">Annuler</button>
+  </div>
+</div>
+
 <!-- FAB -->
 <button class="fab" id="fab-btn" onclick="openCmdModal()">＋ Nouvelle commande</button>
 
@@ -1797,6 +1833,7 @@ const ETAPES_BRASSAGE=[
   {k:'empatage',l:'Empâtage',icon:'🌾',cats:['malts','flocons','sucres','epices']},
   {k:'start',l:'Ébullition — START',icon:'🔥',cats:['houblons','epices','sucres']},
   {k:'middle',l:'Ébullition — MIDDLE',icon:'🔥',cats:['houblons','epices']},
+  {k:'epices',l:'Ébullition — Épices',icon:'🧂',cats:['epices']},
   {k:'end',l:'Ébullition — END',icon:'🔥',cats:['houblons','epices']},
   {k:'horsfeu',l:'Hors feu',icon:'♨️',cats:['houblons','epices']},
   {k:'fermentation',l:'Fermentation',icon:'🧬',cats:['levures','sucres']},
@@ -1853,21 +1890,161 @@ function coutRecette(r,facteur=1){
   ETAPES_BRASSAGE.forEach(e=>{
     (r.etapes[e.k]||[]).forEach(ing=>{
       const info=matParCode(ing.code);
-      if(info&&info.mat.prix!=null){
-        // qté recette en kg/g selon matière ; prix en €/unité de stock
-        const q=parseFloat(ing.qte)||0;
-        total+=q*facteur*info.mat.prix;
+      if(info){
+        const prix=prixIngredient(info.mat);
+        if(prix!=null){
+          const q=parseFloat(ing.qte)||0;
+          total+=q*facteur*prix;
+        }
       }
     });
   });
   return total;
 }
 function brasserDepuisRecette(id){
-  // Ouvre le modal brassin pré-rempli depuis la recette (étape suivante du dev)
-  alert('🍺 Cette fonction arrive à la prochaine étape !');
+  // Ouvre le modal brassin pré-rempli depuis la recette (étape suivante)
+  alert('🍺 Le lancement de brassin depuis recette arrive à la prochaine étape !');
+}
+
+// ===== ÉDITEUR DE RECETTE =====
+// Options du menu ingrédient pour une catégorie donnée (avec code)
+function optionsIngredient(cats,selectedCode){
+  let opts='<option value="">— ingrédient —</option>';
+  cats.forEach(cat=>{
+    (state.matieres[cat]||[]).forEach(m=>{
+      const val=m.code||m.id;
+      const lbl=(m.code?m.code+' · ':'')+(m.nom||'?');
+      opts+=`<option value="${val}"${val===selectedCode?' selected':''}>${lbl}</option>`;
+    });
+  });
+  return opts;
 }
 function openRecetteModal(id){
-  alert('📖 L\'éditeur de recette complet arrive à la prochaine étape !');
+  const r=id?state.recettes.find(x=>x.id===id):null;
+  document.getElementById('rec-modal-title').textContent=r?'Modifier recette':'Nouvelle recette';
+  document.getElementById('rec-edit-id').value=id||'';
+  document.getElementById('rec-nom').value=r?r.nom:'';
+  document.getElementById('rec-biere').innerHTML='<option value="">— aucune —</option>'+state.bieres.map(b=>`<option value="${b}"${r&&r.biere===b?' selected':''}>La ${b}</option>`).join('');
+  document.getElementById('rec-volume').value=r?(r.volumeBase||1000):1000;
+  document.getElementById('rec-ref').value=r?(r.ref||''):'';
+  document.getElementById('rec-dens-avant').value=r?(r.densiteAvant||''):'';
+  document.getElementById('rec-dens-init').value=r?(r.densiteInit||''):'';
+  document.getElementById('rec-dens-finale').value=r?(r.densiteFinale||''):'';
+  document.getElementById('rec-ebullition').value=r?(r.ebullition||''):'';
+  // Générer les blocs d'étapes (avec paliers de température juste après l'empâtage)
+  const cont=document.getElementById('rec-etapes');
+  cont.innerHTML=ETAPES_BRASSAGE.map(e=>{
+    let bloc=`
+    <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:14px 0 6px">${e.icon} ${e.l}</div>
+    <div id="rec-etape-${e.k}"></div>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="addIngrRecetteLigne('${e.k}')">＋ Ingrédient</button>`;
+    // Après l'empâtage : insérer les paliers de température
+    if(e.k==='empatage'){
+      bloc+=`
+    <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:14px 0 6px">🌡️ Paliers de température (empâtage)</div>
+    <div id="rec-paliers"></div>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="addPalierLigne()">＋ Palier</button>`;
+    }
+    return bloc;
+  }).join('');
+  // Remplir les ingrédients existants
+  ETAPES_BRASSAGE.forEach(e=>{
+    document.getElementById('rec-etape-'+e.k).innerHTML='';
+    const list=(r&&r.etapes&&r.etapes[e.k])?r.etapes[e.k]:[];
+    list.forEach(ing=>addIngrRecetteLigne(e.k,ing.code,ing.qte));
+  });
+  // Paliers
+  document.getElementById('rec-paliers').innerHTML='';
+  const paliers=(r&&r.paliers)?r.paliers:[];
+  if(paliers.length)paliers.forEach(p=>addPalierLigne(p.temp,p.duree));
+  else addPalierLigne();
+  document.getElementById('rec-delete-btn').style.display=id?'block':'none';
+  document.getElementById('rec-cout').innerHTML='';
+  updateCoutRecette();
+  document.getElementById('modal-recette').classList.add('open');
+}
+// Ligne ingrédient dans une étape
+function addIngrRecetteLigne(etapeKey,code=null,qte=''){
+  const etape=ETAPES_BRASSAGE.find(e=>e.k===etapeKey);
+  const div=document.createElement('div');
+  div.className='biere-line';
+  div.innerHTML=`<select class="form-select ingr-rec-sel" onchange="updateCoutRecette()">${optionsIngredient(etape.cats,code)}</select>
+    <input type="number" step="0.001" class="form-input ingr-rec-qte" value="${qte}" placeholder="kg" oninput="updateCoutRecette()">
+    <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove();updateCoutRecette()">✕</button>`;
+  document.getElementById('rec-etape-'+etapeKey).appendChild(div);
+}
+// Ligne palier
+function addPalierLigne(temp='',duree=''){
+  const div=document.createElement('div');
+  div.className='biere-line';
+  div.innerHTML=`<input type="text" class="form-input palier-temp" value="${temp}" placeholder="Ex: 63°">
+    <input type="text" class="form-input palier-duree" value="${duree}" placeholder="Ex: 75min">
+    <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('rec-paliers').appendChild(div);
+}
+// Récupère les ingrédients d'une étape depuis le formulaire
+function getEtapeIngredients(etapeKey){
+  return [...document.querySelectorAll('#rec-etape-'+etapeKey+' .biere-line')].map(div=>{
+    const code=div.querySelector('.ingr-rec-sel').value;
+    const qte=parseFloat(div.querySelector('.ingr-rec-qte').value)||0;
+    if(!code||qte<=0)return null;
+    return {code,qte};
+  }).filter(x=>x);
+}
+function getPaliers(){
+  return [...document.querySelectorAll('#rec-paliers .biere-line')].map(div=>{
+    const temp=div.querySelector('.palier-temp').value.trim();
+    const duree=div.querySelector('.palier-duree').value.trim();
+    if(!temp&&!duree)return null;
+    return {temp,duree};
+  }).filter(x=>x);
+}
+// Construit l'objet recette depuis le formulaire (pour calcul coût en direct)
+function lireRecetteFormulaire(){
+  const etapes={};
+  ETAPES_BRASSAGE.forEach(e=>{etapes[e.k]=getEtapeIngredients(e.k);});
+  return {etapes,volumeBase:parseFloat(document.getElementById('rec-volume').value)||1000};
+}
+function updateCoutRecette(){
+  const r=lireRecetteFormulaire();
+  const cout=coutRecette(r);
+  const vol=r.volumeBase||1000;
+  const el=document.getElementById('rec-cout');
+  if(cout>0){
+    el.innerHTML=`<div class="alert alert-green" style="font-size:13px">💰 Coût matières : <b>${cout.toFixed(2)} €</b> pour ${vol} L — soit <b>${(cout/vol).toFixed(3)} €/L</b></div>`;
+  }else{
+    el.innerHTML='<div style="font-size:11px;color:var(--text-muted)">💰 Coût : ajoute des prix aux lots de tes ingrédients pour le calcul</div>';
+  }
+}
+function saveRecette(){
+  const id=document.getElementById('rec-edit-id').value;
+  const nom=document.getElementById('rec-nom').value.trim();
+  if(!nom){alert('Saisis un nom de recette');return;}
+  const etapes={};
+  ETAPES_BRASSAGE.forEach(e=>{etapes[e.k]=getEtapeIngredients(e.k);});
+  const obj={
+    id:id||('rec'+(state.nextId++)),
+    nom,
+    biere:document.getElementById('rec-biere').value,
+    volumeBase:parseFloat(document.getElementById('rec-volume').value)||1000,
+    ref:document.getElementById('rec-ref').value.trim(),
+    densiteAvant:document.getElementById('rec-dens-avant').value.trim(),
+    densiteInit:document.getElementById('rec-dens-init').value.trim(),
+    densiteFinale:document.getElementById('rec-dens-finale').value.trim(),
+    ebullition:document.getElementById('rec-ebullition').value.trim(),
+    paliers:getPaliers(),
+    etapes
+  };
+  if(id)state.recettes=state.recettes.map(x=>x.id===id?obj:x);
+  else state.recettes.push(obj);
+  save();closeModal('modal-recette');renderRecettes();
+}
+function deleteRecetteFromModal(){
+  const id=document.getElementById('rec-edit-id').value;
+  if(!id)return;
+  if(!confirm('Supprimer cette recette ?'))return;
+  state.recettes=state.recettes.filter(x=>x.id!==id);
+  save();closeModal('modal-recette');renderRecettes();
 }
 
 // ===== CALCUL AJUSTEMENT HOUBLON =====
