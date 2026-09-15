@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>🍺 BièreManager</title>
@@ -263,6 +264,18 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 <div class="content" id="tab-config">
   <div class="section-title">⚙️ Configuration</div>
   <div class="card">
+    <div class="card-title">💾 Sauvegarde des données</div>
+    <div id="derniere-sauvegarde" style="font-size:12px;margin-bottom:10px"></div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Télécharge toutes tes données dans un fichier de sauvegarde. Garde-le précieusement : en cas de bug ou de perte, tu pourras tout restaurer.</p>
+    <button class="btn btn-primary" onclick="exporterSauvegarde()">📤 Télécharger une sauvegarde</button>
+    <div style="margin-top:10px">
+      <label class="form-label">📥 Restaurer depuis un fichier</label>
+      <input type="file" id="restore-file" accept=".json" class="form-input" style="padding:8px">
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="restaurerSauvegarde()">📥 Restaurer cette sauvegarde</button>
+    </div>
+    <div id="backup-result" style="margin-top:10px;font-size:12px"></div>
+  </div>
+  <div class="card">
     <div class="card-title">☁️ Synchronisation entre téléphones</div>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Utilise <strong style="color:var(--amber-light)">JSONBin.io</strong> (gratuit) pour partager les données entre vos deux téléphones.</p>
     <div class="form-group"><label class="form-label">Bin ID</label>
@@ -296,6 +309,11 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     </div>
   </div>
   <div class="card">
+    <div class="card-title">🌾 Bibliothèque d'ingrédients</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Gère tes ingrédients par catégorie et attribue-leur un code (M1, H4...). Ces ingrédients alimentent les recettes et les stocks.</p>
+    <button class="btn btn-primary" onclick="showTab('ingredients')">🌾 Gérer mes ingrédients</button>
+  </div>
+  <div class="card">
     <div class="card-title">⚠️ Seuils d'alerte</div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Min fûts 10L</label><input type="number" class="form-input" id="seuil-10L" min="0"></div>
@@ -312,6 +330,32 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     <button class="btn btn-primary" onclick="demanderNotifs()">🔔 Activer les notifications</button>
   </div>
   <div class="bottom-space"></div>
+</div>
+
+<!-- INGREDIENTS (bibliothèque) -->
+<div class="content" id="tab-ingredients">
+  <div class="section-title">🌾 Bibliothèque d'ingrédients</div>
+  <button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="showTab('config')">← Retour Config</button>
+  <div id="ingredients-content"></div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- MODAL INGREDIENT -->
+<div class="modal-overlay" id="modal-ingredient">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-ingredient')">✕</button>
+    <div class="modal-title" id="ing-modal-title">Ingrédient</div>
+    <input type="hidden" id="ing-cat"><input type="hidden" id="ing-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nom de l'ingrédient</label><input type="text" class="form-input" id="ing-nom" placeholder="Ex: Cascade"></div>
+      <div class="form-group"><label class="form-label">Code</label><input type="text" class="form-input" id="ing-code" placeholder="Ex: H4" style="text-transform:uppercase"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Unité par défaut</label>
+      <select class="form-select" id="ing-unite"><option value="kg">kg</option><option value="g">g</option><option value="L">L</option><option value="ml">ml</option><option value="sachet">sachet(s)</option><option value="unité">unité(s)</option></select></div>
+    <button class="btn btn-primary" onclick="saveIngredient()">✅ Sauvegarder</button>
+    <button class="btn btn-danger" id="ing-delete-btn" onclick="deleteIngredient()">🗑 Supprimer</button>
+    <button class="btn btn-secondary" onclick="closeModal('modal-ingredient')">Annuler</button>
+  </div>
 </div>
 
 <!-- MODAL NOTE / PENSE-BÊTE -->
@@ -336,8 +380,8 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 <div class="modal-overlay" id="modal-import">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('modal-import')">✕</button>
-    <div class="modal-title">📥 Importer un bulletin</div>
-    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Colle ici le code que Claude t'a préparé à partir de ton scan. Tu peux coller plusieurs houblons d'un coup.</p>
+    <div class="modal-title">📥 Importer (bulletin ou livraison)</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Colle le code que Claude t'a préparé à partir d'un scan (bulletin d'analyse OU bon de livraison/facture). Ça ajoute les matières et/ou complète les stocks.</p>
     <div class="form-group">
       <textarea class="form-input" id="import-text" rows="8" placeholder='Colle le code ici...' style="resize:vertical;font-family:monospace;font-size:12px"></textarea>
     </div>
@@ -352,14 +396,36 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 <div class="modal-overlay" id="modal-matiere">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('modal-matiere')">✕</button>
-    <div class="modal-title" id="mat-modal-title">Matière première</div>
+    <div class="modal-title" id="mat-modal-title">Ingrédient</div>
     <input type="hidden" id="mat-cat"><input type="hidden" id="mat-edit-id">
-    <div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="mat-nom" placeholder="Ex: Pilsner, Cascade, Coriandre..."></div>
-    <div class="form-group" id="mat-lot-group"><label class="form-label">N° de lot</label><input type="text" class="form-input" id="mat-lot" placeholder="Ex: L2024-045"></div>
-    <div id="mat-hop-fields"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nom de l'ingrédient</label><input type="text" class="form-input" id="mat-nom" placeholder="Ex: Cascade, Pilsner..."></div>
+      <div class="form-group"><label class="form-label">Code (ex: H4)</label><input type="text" class="form-input" id="mat-code" placeholder="H4" style="text-transform:uppercase"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Unité</label>
+        <select class="form-select" id="mat-unite"><option value="kg">kg</option><option value="g">g</option><option value="L">L</option><option value="ml">ml</option><option value="sachet">sachet(s)</option><option value="unité">unité(s)</option></select></div>
+      <div class="form-group"><label class="form-label">Seuil alerte stock</label><input type="number" step="0.01" min="0" class="form-input" id="mat-seuil" placeholder="Optionnel"></div>
+    </div>
+    <!-- LOTS -->
+    <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:12px 0 6px">📦 Lots en stock</div>
+    <div id="mat-lots-lignes"></div>
+    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="addLotLigne()">＋ Ajouter un lot</button>
+    <div style="margin-top:14px"></div>
     <button class="btn btn-primary" onclick="saveMatiere()">✅ Sauvegarder</button>
-    <button class="btn btn-danger" id="mat-delete-btn" onclick="deleteMatiere()">🗑 Supprimer</button>
+    <button class="btn btn-danger" id="mat-delete-btn" onclick="deleteMatiere()">🗑 Supprimer l'ingrédient</button>
     <button class="btn btn-secondary" onclick="closeModal('modal-matiere')">Annuler</button>
+  </div>
+</div>
+
+<!-- MODAL LOT (analyse houblon détaillée) -->
+<div class="modal-overlay" id="modal-lot-analyse">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-lot-analyse')">✕</button>
+    <div class="modal-title">🔬 Analyse du lot</div>
+    <div id="lot-analyse-fields"></div>
+    <button class="btn btn-primary" onclick="saveLotAnalyse()">✅ Valider l'analyse</button>
+    <button class="btn btn-secondary" onclick="closeModal('modal-lot-analyse')">Fermer</button>
   </div>
 </div>
 
@@ -371,8 +437,12 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
     <input type="hidden" id="brassin-edit-id">
     <div class="form-group"><label class="form-label">Nom du brassin</label><input type="text" class="form-input" id="br-nom" placeholder="Ex: IPA lot 42"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="br-date"></div>
-      <div class="form-group"><label class="form-label">Bière</label><select class="form-select" id="br-biere"></select></div>
+      <div class="form-group"><label class="form-label">Date de brassage</label><input type="date" class="form-input" id="br-date"></div>
+      <div class="form-group"><label class="form-label">Bière</label><select class="form-select" id="br-biere" onchange="updateNumLot()"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Date ouverture fermenteur</label><input type="date" class="form-input" id="br-date-prete" onchange="updateNumLot()"></div>
+      <div class="form-group"><label class="form-label">N° de lot (auto)</label><input type="text" class="form-input" id="br-num-lot" placeholder="ex: N260914" readonly style="background:var(--dark);font-weight:700;color:var(--amber-light)"></div>
     </div>
     <div class="form-group"><label class="form-label">Volume (L)</label><input type="number" class="form-input" id="br-volume" min="0" step="0.5" placeholder="Ex: 200"></div>
 
@@ -627,8 +697,23 @@ function migrate(){
   if(!state.notesRecur) state.notesRecur=[];    // pense-bêtes récurrents {id,jour(0-6),texte}
   if(!state.notifs) state.notifs={active:false,dejaVus:[]};
   // Matières premières (brasserie)
-  if(!state.matieres) state.matieres={malts:[],houblons:[],epices:[],levures:[],eau:[]};
-  ['malts','houblons','epices','levures','eau'].forEach(k=>{if(!state.matieres[k])state.matieres[k]=[];});
+  if(!state.matieres) state.matieres={malts:[],houblons:[],epices:[],levures:[],eau:[],sucres:[],flocons:[]};
+  ['malts','houblons','epices','levures','eau','sucres','flocons'].forEach(k=>{if(!state.matieres[k])state.matieres[k]=[];});
+  // Migration vers structure ingrédient→lots : chaque matière a un code + un tableau lots
+  ['malts','houblons','epices','levures','eau','sucres','flocons'].forEach(k=>{
+    state.matieres[k].forEach(m=>{
+      if(!m.lots){
+        // Ancienne structure : la matière était elle-même un lot → on crée un lot dessous
+        m.lots=[];
+        if(m.lot||m.stock||m.analyse){
+          m.lots.push({id:'lot'+(state.nextId++),lot:m.lot||'',stock:m.stock||0,prix:m.prix!=null?m.prix:null,analyse:m.analyse||null,date:m.date||''});
+        }
+        delete m.lot; delete m.stock; delete m.analyse;
+      }
+      if(m.code===undefined)m.code='';
+    });
+  });
+  if(!state.recettes) state.recettes=[];
   if(!state.brassins) state.brassins=[];
   upgradeTireusesInox();
   state.bieres.forEach(b=>{
@@ -888,11 +973,11 @@ function showTab(name){
   document.getElementById('tab-'+name)?.classList.add('active');
   document.querySelectorAll('.tab').forEach(t=>{if(t.textContent.includes(TAB_MAP[name]))t.classList.add('active');});
   const fab=document.getElementById('fab-btn');
-  const noFab=['config','tireuses','fermenteurs','futs','brassage','timeline'];
+  const noFab=['config','tireuses','fermenteurs','futs','brassage','timeline','ingredients'];
   if(noFab.includes(name)){fab.style.display='none';}
   else if(name==='clients'){fab.style.display='flex';fab.innerHTML='＋ Nouveau client';fab.onclick=()=>openClientModal();}
   else{fab.style.display='flex';fab.innerHTML='＋ Nouvelle commande';fab.onclick=openCmdModal;}
-  const fn={dashboard:renderDashboard,commandes:renderCommandes,planning:renderPlanning,timeline:renderTimeline,clients:renderClients,tireuses:renderTireuses,fermenteurs:renderFermenteurs,futs:renderFuts,brassage:renderBrassage,config:renderConfig};
+  const fn={dashboard:renderDashboard,commandes:renderCommandes,planning:renderPlanning,timeline:renderTimeline,clients:renderClients,tireuses:renderTireuses,fermenteurs:renderFermenteurs,futs:renderFuts,brassage:renderBrassage,config:renderConfig,ingredients:renderIngredients};
   fn[name]&&fn[name]();
 }
 
@@ -1679,8 +1764,10 @@ const HOP_ANALYSES=[
 ];
 const MAT_CATS=[
   {k:'malts',l:'Malts',icon:'🌾'},
+  {k:'flocons',l:'Flocons',icon:'🥣'},
   {k:'houblons',l:'Houblons',icon:'🌿'},
   {k:'epices',l:'Épices',icon:'🧂'},
+  {k:'sucres',l:'Sucres',icon:'🍬'},
   {k:'levures',l:'Levures',icon:'🧬'},
   {k:'eau',l:'Eau / Minéraux',icon:'💧'},
 ];
@@ -1688,74 +1775,292 @@ const MAT_CATS=[
 function renderBrassage(){
   const el=document.getElementById('brassage-content');
   el.innerHTML=`
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="btn ${brassageSubTab==='brassins'?'btn-primary':'btn-secondary'}" style="flex:1;margin:0" onclick="setBrassageSub('brassins')">🍺 Brassins</button>
-      <button class="btn ${brassageSubTab==='matieres'?'btn-primary':'btn-secondary'}" style="flex:1;margin:0" onclick="setBrassageSub('matieres')">📦 Matières 1ères</button>
+    <div style="display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn ${brassageSubTab==='brassins'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('brassins')">🍺 Brassins</button>
+      <button class="btn ${brassageSubTab==='recettes'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('recettes')">📖 Recettes</button>
+      <button class="btn ${brassageSubTab==='matieres'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('matieres')">📦 Matières</button>
+      <button class="btn ${brassageSubTab==='calcul'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('calcul')">🧮 Houblon</button>
     </div>
     <div id="brassage-sub"></div>`;
   if(brassageSubTab==='brassins')renderBrassins();
+  else if(brassageSubTab==='recettes')renderRecettes();
+  else if(brassageSubTab==='calcul')renderCalculHoublon();
   else renderMatieres();
 }
 function setBrassageSub(t){brassageSubTab=t;renderBrassage();}
 
+// ================================================================
+// RECETTES (structure chronologique)
+// ================================================================
+// Étapes du process de brassage, dans l'ordre chronologique
+const ETAPES_BRASSAGE=[
+  {k:'empatage',l:'Empâtage',icon:'🌾',cats:['malts','flocons','sucres','epices']},
+  {k:'start',l:'Ébullition — START',icon:'🔥',cats:['houblons','epices','sucres']},
+  {k:'middle',l:'Ébullition — MIDDLE',icon:'🔥',cats:['houblons','epices']},
+  {k:'end',l:'Ébullition — END',icon:'🔥',cats:['houblons','epices']},
+  {k:'horsfeu',l:'Hors feu',icon:'♨️',cats:['houblons','epices']},
+  {k:'fermentation',l:'Fermentation',icon:'🧬',cats:['levures','sucres']},
+  {k:'dryhoping',l:'Dry hoping',icon:'❄️',cats:['houblons']},
+];
+// Trouve une matière par son code personnalisé (ex: M1) ou son id
+function matParCode(code){
+  for(const cat of ['malts','flocons','houblons','epices','sucres','levures','eau']){
+    const m=(state.matieres[cat]||[]).find(x=>x.code===code||x.id===code);
+    if(m)return {mat:m,cat};
+  }
+  return null;
+}
+// Nom affiché d'un ingrédient de recette (nom réel si dispo, sinon code)
+function nomIngredient(code){
+  const r=matParCode(code);
+  if(r&&r.mat.nom&&r.mat.nom!==code)return r.mat.nom;
+  return code;
+}
+
+function renderRecettes(){
+  const rs=[...state.recettes].sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
+  let html=`<button class="btn btn-primary" style="margin-bottom:12px" onclick="openRecetteModal()">➕ Nouvelle recette</button>`;
+  if(!rs.length){
+    html+='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucune recette. Crée-en une ou importe tes recettes.</div>';
+  }else{
+    html+=rs.map(r=>{
+      const nbIngr=ETAPES_BRASSAGE.reduce((s,e)=>s+((r.etapes&&r.etapes[e.k])?r.etapes[e.k].length:0),0);
+      const cout=coutRecette(r);
+      return `<div class="cmd-item">
+        <div class="cmd-top"><div class="cmd-client">${r.nom}${r.biere?' · La '+r.biere:''}</div>
+          <div style="display:flex"><button class="icon-btn" onclick="openRecetteModal('${r.id}')">✏️</button>
+          <button class="icon-btn" onclick="deleteRecette('${r.id}')">🗑</button></div></div>
+        <div class="cmd-date">Volume de base : ${r.volumeBase||1000} L${r.densiteInit?' · DI '+r.densiteInit:''}</div>
+        <div class="tags">
+          <span class="tag tag-liv">${nbIngr} ingrédient(s)</span>
+          ${cout?`<span class="tag tag-fut">💰 ${cout.toFixed(2)}€ (${(cout/(r.volumeBase||1000)).toFixed(3)}€/L)</span>`:''}
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="brasserDepuisRecette('${r.id}')">🍺 Lancer un brassin depuis cette recette</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('brassage-sub').innerHTML=html;
+}
+function deleteRecette(id){
+  if(!confirm('Supprimer cette recette ?'))return;
+  state.recettes=state.recettes.filter(x=>x.id!==id);
+  save();renderRecettes();
+}
+// Coût matières d'une recette (au volume de base)
+function coutRecette(r,facteur=1){
+  let total=0;
+  if(!r.etapes)return 0;
+  ETAPES_BRASSAGE.forEach(e=>{
+    (r.etapes[e.k]||[]).forEach(ing=>{
+      const info=matParCode(ing.code);
+      if(info&&info.mat.prix!=null){
+        // qté recette en kg/g selon matière ; prix en €/unité de stock
+        const q=parseFloat(ing.qte)||0;
+        total+=q*facteur*info.mat.prix;
+      }
+    });
+  });
+  return total;
+}
+function brasserDepuisRecette(id){
+  // Ouvre le modal brassin pré-rempli depuis la recette (étape suivante du dev)
+  alert('🍺 Cette fonction arrive à la prochaine étape !');
+}
+function openRecetteModal(id){
+  alert('📖 L\'éditeur de recette complet arrive à la prochaine étape !');
+}
+
+// ===== CALCUL AJUSTEMENT HOUBLON =====
+function renderCalculHoublon(){
+  const houblons=state.matieres.houblons||[];
+  const optsRef=houblons.filter(h=>h.analyse&&h.analyse.alpha).map(h=>`<option value="${h.id}">${h.nom}${h.lot?' (lot '+h.lot+')':''} — ${h.analyse.alpha}% α</option>`).join('');
+  document.getElementById('brassage-sub').innerHTML=`
+    <div class="card">
+      <div class="card-title">🧮 Ajuster une quantité de houblon</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Adapte la quantité selon la teneur en acides alpha du nouveau lot, pour garder la même amertume.</p>
+
+      <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin-bottom:8px">📋 Recette de référence</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Quantité d'origine (g)</label>
+          <input type="number" class="form-input" id="calc-qte-ref" min="0" step="1" oninput="doCalcHoublon()" placeholder="Ex: 500"></div>
+        <div class="form-group"><label class="form-label">Alpha de référence (%)</label>
+          <input type="number" class="form-input" id="calc-alpha-ref" min="0" step="0.1" oninput="doCalcHoublon()" placeholder="Ex: 12"></div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:10px 0 8px">🌿 Nouveau lot</div>
+      <div class="form-group"><label class="form-label">Choisir un houblon en stock</label>
+        <select class="form-select" id="calc-houblon" onchange="applyCalcHoublon()">
+          <option value="">— saisie manuelle —</option>${optsRef}
+        </select></div>
+      <div class="form-group"><label class="form-label">Alpha du nouveau lot (%)</label>
+        <input type="number" class="form-input" id="calc-alpha-new" min="0" step="0.1" oninput="doCalcHoublon()" placeholder="Ex: 17.6"></div>
+
+      <div id="calc-result" style="margin-top:14px"></div>
+    </div>`;
+}
+function applyCalcHoublon(){
+  const id=document.getElementById('calc-houblon').value;
+  if(!id)return;
+  const h=(state.matieres.houblons||[]).find(x=>x.id===id);
+  if(h&&h.analyse&&h.analyse.alpha){
+    document.getElementById('calc-alpha-new').value=h.analyse.alpha;
+    doCalcHoublon();
+  }
+}
+function doCalcHoublon(){
+  const qteRef=parseFloat(document.getElementById('calc-qte-ref').value);
+  const alphaRef=parseFloat(document.getElementById('calc-alpha-ref').value);
+  const alphaNew=parseFloat(document.getElementById('calc-alpha-new').value);
+  const res=document.getElementById('calc-result');
+  if(!qteRef||!alphaRef||!alphaNew){res.innerHTML='';return;}
+  if(alphaNew<=0){res.innerHTML='<div class="alert alert-red">Alpha du nouveau lot invalide</div>';return;}
+  const qteNew=qteRef*(alphaRef/alphaNew);
+  const diff=qteNew-qteRef;
+  const pct=((qteNew/qteRef-1)*100);
+  const sens=diff<0?'moins':'plus';
+  res.innerHTML=`<div class="alert alert-green" style="font-size:14px">
+    <div style="font-size:22px;font-weight:700;margin-bottom:6px">➡️ ${qteNew.toFixed(0)} g</div>
+    <div style="font-size:12px">Soit ${Math.abs(diff).toFixed(0)} g de ${sens} qu'à l'origine (${pct>0?'+':''}${pct.toFixed(1)}%)</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Calcul : ${qteRef} g × (${alphaRef}% ÷ ${alphaNew}%) = ${qteNew.toFixed(1)} g<br>Même apport en acides alpha → même amertume</div>
+  </div>`;
+}
+
 // ===== MATIÈRES PREMIÈRES =====
+// Stock total d'un ingrédient (somme de ses lots)
+function stockIngredient(m){return (m.lots||[]).reduce((s,l)=>s+(parseFloat(l.stock)||0),0);}
+// Prix moyen d'un ingrédient (moyenne pondérée des lots avec prix, sinon prix ingrédient)
+function prixIngredient(m){
+  const lotsAvecPrix=(m.lots||[]).filter(l=>l.prix!=null&&l.stock>0);
+  if(lotsAvecPrix.length){
+    let totQ=0,totP=0;
+    lotsAvecPrix.forEach(l=>{totQ+=parseFloat(l.stock);totP+=parseFloat(l.stock)*parseFloat(l.prix);});
+    if(totQ>0)return totP/totQ;
+  }
+  return m.prix!=null?m.prix:null;
+}
+
 function renderMatieres(){
   let html='';
-  html+=`<button class="btn btn-primary" style="margin-bottom:12px" onclick="openImportModal()">📥 Importer un bulletin (coller le code)</button>`;
+  html+=`<button class="btn btn-primary" style="margin-bottom:12px" onclick="openImportModal()">📥 Importer (bulletin / livraison)</button>`;
   MAT_CATS.forEach(cat=>{
-    const items=state.matieres[cat.k]||[];
+    const items=[...(state.matieres[cat.k]||[])].sort((a,b)=>(a.code||'zzz').localeCompare(b.code||'zzz',undefined,{numeric:true}));
     html+=`<div class="card"><div class="card-title">${cat.icon} ${cat.l}</div>`;
-    if(!items.length)html+='<div style="color:var(--text-muted);font-size:13px;margin-bottom:8px">Aucune matière enregistrée</div>';
+    if(!items.length)html+='<div style="color:var(--text-muted);font-size:13px;margin-bottom:8px">Aucun ingrédient enregistré</div>';
     else html+=items.map(m=>{
-      let sub=m.lot?`Lot : ${m.lot}`:'';
-      if(cat.k==='houblons'&&m.analyse){
-        const a=m.analyse;
-        const parts=HOP_ANALYSES.filter(h=>a[h.k]!==undefined&&a[h.k]!=='').map(h=>`${h.l.split(' ')[0]}: ${a[h.k]}${h.u}`);
-        if(parts.length)sub+=(sub?' · ':'')+parts.join(' · ');
+      const stockTot=stockIngredient(m);
+      const unite=m.unite||'';
+      const prix=prixIngredient(m);
+      const bas=m.seuil!=null&&stockTot<=m.seuil;
+      const vide=stockTot<=0;
+      const badgeCls=vide?'badge-full':bas?'badge-warn':'badge-ok';
+      const nbLots=(m.lots||[]).length;
+      let sub=[];
+      if(m.code)sub.push(`<b style="color:var(--amber-light)">${m.code}</b>`);
+      if(prix!=null)sub.push(`💰 ${prix.toFixed(2)}€/${unite}`);
+      if(nbLots)sub.push(`${nbLots} lot(s)`);
+      // Détail des lots
+      let lotsHtml='';
+      if(nbLots){
+        lotsHtml=(m.lots||[]).map(l=>{
+          let linfo=l.lot?l.lot:'(sans n°)';
+          if(cat.k==='houblons'&&l.analyse&&l.analyse.alpha)linfo+=` · α ${l.analyse.alpha}%`;
+          if(l.prix!=null)linfo+=` · ${l.prix}€`;
+          return `<div style="font-size:11px;color:var(--text-muted);padding:3px 0 3px 12px;border-left:2px solid var(--border);margin-left:4px;display:flex;justify-content:space-between">
+            <span>📦 ${linfo}</span><span style="font-weight:600">${l.stock||0} ${unite}</span></div>`;
+        }).join('');
       }
-      return `<div class="row"><div><div class="row-name">${m.nom}</div>${sub?`<div class="row-sub">${sub}</div>`:''}</div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-secondary btn-sm" onclick="openMatiereModal('${cat.k}','${m.id}')">✏️</button>
-        </div></div>`;
+      return `<div style="border-bottom:1px solid var(--border);padding:8px 0">
+        <div class="row" style="border:none;padding:0">
+          <div><div class="row-name">${m.nom||'(sans nom)'}</div><div class="row-sub">${sub.join(' · ')}</div></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="badge ${badgeCls}">${stockTot} ${unite}</span>
+            <button class="btn btn-secondary btn-sm" onclick="openMatiereModal('${cat.k}','${m.id}')">✏️</button>
+          </div>
+        </div>
+        ${lotsHtml}
+      </div>`;
     }).join('');
-    html+=`<button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="openMatiereModal('${cat.k}')">➕ Ajouter ${cat.l.toLowerCase()}</button></div>`;
+    html+=`<button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="openMatiereModal('${cat.k}')">➕ Ajouter un ingrédient</button></div>`;
   });
   document.getElementById('brassage-sub').innerHTML=html;
 }
 
+let currentLotAnalyse=null; // {lotIdx, analyse} pour le modal analyse
 function openMatiereModal(cat,id=null){
   const m=id?(state.matieres[cat]||[]).find(x=>x.id===id):null;
   const catInfo=MAT_CATS.find(c=>c.k===cat);
   document.getElementById('mat-cat').value=cat;
   document.getElementById('mat-edit-id').value=id||'';
-  document.getElementById('mat-modal-title').textContent=(m?'Modifier ':'Ajouter ')+catInfo.l.toLowerCase();
+  document.getElementById('mat-modal-title').textContent=(m?'Modifier ':'Ajouter ')+catInfo.l.toLowerCase().replace(/s$/,'');
   document.getElementById('mat-nom').value=m?m.nom:'';
-  document.getElementById('mat-lot').value=m?(m.lot||''):'';
-  // Champ lot visible sauf pour l'eau
-  document.getElementById('mat-lot-group').style.display=(cat==='eau')?'none':'block';
-  // Bloc analyse houblon
-  const showHop=(cat==='houblons');
-  document.getElementById('mat-hop-fields').style.display=showHop?'block':'none';
-  if(showHop){
-    const a=(m&&m.analyse)||{};
-    document.getElementById('mat-hop-fields').innerHTML='<div style="font-size:12px;color:var(--amber-light);font-weight:700;margin:6px 0">🔬 Bulletin d\'analyse (par lot)</div>'+
-      HOP_ANALYSES.map(h=>`<div class="form-group"><label class="form-label">${h.l} (${h.u})</label>
-        <input type="number" step="0.01" class="form-input mat-hop" data-k="${h.k}" value="${a[h.k]!==undefined?a[h.k]:''}"></div>`).join('');
-  }
+  document.getElementById('mat-code').value=m?(m.code||''):'';
+  document.getElementById('mat-unite').value=m?(m.unite||'kg'):(cat==='epices'||cat==='levures'?'g':cat==='eau'?'L':'kg');
+  document.getElementById('mat-seuil').value=m?(m.seuil!=null?m.seuil:''):'';
+  // Lots
+  document.getElementById('mat-lots-lignes').innerHTML='';
+  matLotsTemp=m?JSON.parse(JSON.stringify(m.lots||[])):[];
+  matCatTemp=cat;
+  renderLotsLignes();
   document.getElementById('mat-delete-btn').style.display=id?'block':'none';
   document.getElementById('modal-matiere').classList.add('open');
+}
+let matLotsTemp=[], matCatTemp='';
+function renderLotsLignes(){
+  const cont=document.getElementById('mat-lots-lignes');
+  if(!matLotsTemp.length){cont.innerHTML='<div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">Aucun lot. Ajoute un lot pour entrer du stock.</div>';return;}
+  cont.innerHTML=matLotsTemp.map((l,i)=>{
+    const estHoublon=matCatTemp==='houblons';
+    const aAnalyse=l.analyse&&Object.keys(l.analyse).length;
+    return `<div style="background:var(--dark2);border-radius:8px;padding:10px;margin-bottom:8px">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">N° de lot</label><input type="text" class="form-input" oninput="matLotsTemp[${i}].lot=this.value" value="${l.lot||''}" placeholder="Ex: PC1-..."></div>
+        <div class="form-group"><label class="form-label">Quantité</label><input type="number" step="0.01" min="0" class="form-input" oninput="matLotsTemp[${i}].stock=parseFloat(this.value)||0" value="${l.stock||''}" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Prix (€/unité)</label><input type="number" step="0.01" min="0" class="form-input" oninput="matLotsTemp[${i}].prix=this.value!==''?parseFloat(this.value):null" value="${l.prix!=null?l.prix:''}" placeholder="Ex: 45"></div>
+        <div class="form-group"><label class="form-label">Date réception</label><input type="date" class="form-input" oninput="matLotsTemp[${i}].date=this.value" value="${l.date||''}"></div>
+      </div>
+      ${estHoublon?`<button type="button" class="btn btn-secondary btn-sm" onclick="openLotAnalyse(${i})">🔬 Analyse ${aAnalyse?'✅':''}</button>`:''}
+      <button type="button" class="btn btn-secondary btn-sm" style="color:var(--red-light)" onclick="matLotsTemp.splice(${i},1);renderLotsLignes()">🗑 Retirer ce lot</button>
+    </div>`;
+  }).join('');
+}
+function addLotLigne(){
+  matLotsTemp.push({id:'lot'+(state.nextId++),lot:'',stock:0,prix:null,analyse:null,date:''});
+  renderLotsLignes();
+}
+function openLotAnalyse(idx){
+  currentLotAnalyse={idx,analyse:matLotsTemp[idx].analyse||{}};
+  const a=currentLotAnalyse.analyse;
+  document.getElementById('lot-analyse-fields').innerHTML=HOP_ANALYSES.map(h=>`<div class="form-group"><label class="form-label">${h.l} (${h.u})</label>
+    <input type="number" step="0.01" class="form-input lot-hop" data-k="${h.k}" value="${a[h.k]!==undefined?a[h.k]:''}"></div>`).join('');
+  document.getElementById('modal-lot-analyse').classList.add('open');
+}
+function saveLotAnalyse(){
+  if(!currentLotAnalyse)return;
+  const a={};
+  document.querySelectorAll('.lot-hop').forEach(inp=>{if(inp.value!=='')a[inp.dataset.k]=parseFloat(inp.value);});
+  matLotsTemp[currentLotAnalyse.idx].analyse=a;
+  closeModal('modal-lot-analyse');
+  renderLotsLignes();
 }
 function saveMatiere(){
   const cat=document.getElementById('mat-cat').value;
   const id=document.getElementById('mat-edit-id').value;
   const nom=document.getElementById('mat-nom').value.trim();
-  if(!nom){alert('Saisis un nom');return;}
-  const obj={id:id||('m'+(state.nextId++)),nom,lot:document.getElementById('mat-lot').value.trim()};
-  if(cat==='houblons'){
-    const a={};
-    document.querySelectorAll('.mat-hop').forEach(inp=>{if(inp.value!=='')a[inp.dataset.k]=parseFloat(inp.value);});
-    obj.analyse=a;
+  if(!nom){alert('Saisis un nom d\'ingrédient');return;}
+  const code=document.getElementById('mat-code').value.trim().toUpperCase();
+  // Vérifier unicité du code
+  if(code){
+    for(const k of Object.keys(state.matieres)){
+      const conflit=state.matieres[k].find(x=>x.code===code&&x.id!==id);
+      if(conflit){alert(`⚠️ Le code ${code} est déjà utilisé par "${conflit.nom}".`);return;}
+    }
   }
+  const obj={id:id||('m'+(state.nextId++)),nom,code,
+    unite:document.getElementById('mat-unite').value,
+    seuil:document.getElementById('mat-seuil').value!==''?parseFloat(document.getElementById('mat-seuil').value):null,
+    lots:matLotsTemp};
   if(!state.matieres[cat])state.matieres[cat]=[];
   if(id)state.matieres[cat]=state.matieres[cat].map(x=>x.id===id?obj:x);
   else state.matieres[cat].push(obj);
@@ -1765,7 +2070,7 @@ function deleteMatiere(){
   const cat=document.getElementById('mat-cat').value;
   const id=document.getElementById('mat-edit-id').value;
   if(!id)return;
-  if(!confirm('Supprimer cette matière première ?'))return;
+  if(!confirm('Supprimer cet ingrédient et tous ses lots ?'))return;
   state.matieres[cat]=state.matieres[cat].filter(x=>x.id!==id);
   save();closeModal('modal-matiere');renderMatieres();
 }
@@ -1812,16 +2117,25 @@ function confirmImport(){
   if(!importParsed)return;
   const {catKey,items}=importParsed;
   if(!state.matieres[catKey])state.matieres[catKey]=[];
-  let ajout=0;
+  let ajout=0, maj=0;
   items.forEach(it=>{
     if(!it.nom)return;
-    const obj={id:'m'+(state.nextId++),nom:it.nom,lot:it.lot||''};
-    if(it.analyse)obj.analyse=it.analyse;
-    state.matieres[catKey].push(obj);
-    ajout++;
+    // Chercher un lot existant identique (même nom + même lot) → on ajoute au stock
+    const existant=it.lot?state.matieres[catKey].find(x=>x.nom===it.nom&&x.lot===it.lot):null;
+    if(existant){
+      if(it.stock)existant.stock=(existant.stock||0)+parseFloat(it.stock);
+      if(it.unite)existant.unite=it.unite;
+      if(it.analyse)existant.analyse=it.analyse; // maj analyse si fournie
+      maj++;
+    }else{
+      const obj={id:'m'+(state.nextId++),nom:it.nom,lot:it.lot||'',stock:parseFloat(it.stock)||0,unite:it.unite||(catKey==='epices'||catKey==='levures'?'g':catKey==='eau'?'L':'kg'),seuil:it.seuil!==undefined?it.seuil:null};
+      if(it.analyse)obj.analyse=it.analyse;
+      state.matieres[catKey].push(obj);
+      ajout++;
+    }
   });
   save();closeModal('modal-import');renderMatieres();
-  alert(`✅ ${ajout} matière(s) importée(s) !`);
+  alert(`✅ ${ajout} ajout(s)${maj?', '+maj+' stock(s) mis à jour':''} !`);
 }
 
 
@@ -1839,22 +2153,115 @@ function renderBrassins(){
         <div class="cmd-top"><div class="cmd-client">${br.nom}${br.biere?' · La '+br.biere:''}</div>
           <div style="display:flex"><button class="icon-btn" onclick="openBrassinModal('${br.id}')">✏️</button>
           <button class="icon-btn" onclick="deleteBrassin('${br.id}')">🗑</button></div></div>
-        <div class="cmd-date">${br.date?fmtDate(br.date):''}${br.volume?' · '+br.volume+'L':''}</div>
+        <div class="cmd-date">${br.date?'Brassé le '+fmtDate(br.date):''}${br.volume?' · '+br.volume+'L':''}</div>
         <div class="tags">
+          ${br.numLot?`<span class="tag tag-retour">🏷️ Lot ${br.numLot}</span>`:''}
           ${br.alcoolCible?`<span class="tag tag-fut">🎯 ${br.alcoolCible}% vol</span>`:''}
           ${br.densiteInit?`<span class="tag tag-tireuse">DI ${br.densiteInit}</span>`:''}
           ${br.densiteFinale?`<span class="tag tag-tireuse">DF ${br.densiteFinale}</span>`:''}
           <span class="tag tag-liv">${nbIngr} ingrédient(s)</span>
         </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="imprimerBrassin('${br.id}')">📄 Imprimer / PDF (A4)</button>
       </div>`;
     }).join('');
   }
   document.getElementById('brassage-sub').innerHTML=html;
 }
 function deleteBrassin(id){
-  if(!confirm('Supprimer ce brassin ?'))return;
+  if(!confirm('Supprimer ce brassin ? (le stock utilisé sera réintégré)'))return;
+  const br=state.brassins.find(x=>x.id===id);
+  if(br&&br.stockDeduit)deduireStockBrassin(br,-1);
   state.brassins=state.brassins.filter(x=>x.id!==id);
-  save();renderBrassins();
+  save();renderBrassins();}
+
+// ===== IMPRESSION PDF A4 D'UN BRASSIN =====
+function imprimerBrassin(id){
+  const br=state.brassins.find(x=>x.id===id);
+  if(!br)return;
+  const matNom=(cat,ing)=>{
+    const m=(state.matieres[cat]||[]).find(x=>x.id===ing.id);
+    return m?(m.nom+(m.lot?' — lot '+m.lot:'')):'(matière supprimée)';
+  };
+  const ligneIngr=(cat,liste,titre)=>{
+    if(!liste||!liste.length)return '';
+    return `<tr><td class="cat" colspan="2">${titre}</td></tr>`+
+      liste.map(ing=>`<tr><td>${matNom(cat,ing)}</td><td class="q">${ing.qte||''}</td></tr>`).join('');
+  };
+  const fmtFull=(s)=>{if(!s)return '—';const[y,m,d]=s.split('-');return `${d}/${m}/${y}`;};
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+  <title>Fiche brassin ${br.numLot||br.nom}</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    * { box-sizing:border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; font-size:12px; line-height:1.5; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #C97D1A; padding-bottom:12px; margin-bottom:18px; }
+    .brand { font-size:22px; font-weight:bold; color:#C97D1A; }
+    .brand small { display:block; font-size:11px; color:#555; font-weight:normal; }
+    .lot-box { text-align:right; }
+    .lot-box .lot { font-size:20px; font-weight:bold; color:#1a1a1a; border:2px solid #C97D1A; padding:6px 14px; border-radius:6px; display:inline-block; }
+    .lot-box .lot-label { font-size:10px; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px; }
+    h1 { font-size:16px; margin:0 0 14px; color:#1a1a1a; }
+    .infos { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; margin-bottom:18px; }
+    .info { border-bottom:1px solid #eee; padding:4px 0; }
+    .info .k { color:#888; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+    .info .v { font-weight:bold; font-size:13px; }
+    table { width:100%; border-collapse:collapse; margin-bottom:18px; }
+    th { background:#f5efe4; color:#8B5610; text-align:left; padding:6px 8px; font-size:11px; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #C97D1A; }
+    td { padding:5px 8px; border-bottom:1px solid #eee; }
+    td.cat { background:#faf6ee; font-weight:bold; color:#8B5610; padding-top:8px; }
+    td.q { text-align:right; font-weight:bold; white-space:nowrap; }
+    .dens { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:18px; }
+    .dens .cell { border:1px solid #ddd; border-radius:6px; padding:8px; text-align:center; }
+    .dens .cell .k { font-size:9px; color:#888; text-transform:uppercase; }
+    .dens .cell .v { font-size:16px; font-weight:bold; color:#C97D1A; }
+    .footer { margin-top:30px; border-top:1px solid #ddd; padding-top:10px; font-size:10px; color:#999; display:flex; justify-content:space-between; }
+    .sign { margin-top:26px; display:flex; justify-content:space-between; }
+    .sign .box { width:45%; }
+    .sign .line { border-top:1px solid #999; margin-top:34px; padding-top:4px; font-size:10px; color:#888; }
+    @media print { .noprint { display:none; } }
+    .noprint { text-align:center; margin:20px; }
+    .noprint button { background:#C97D1A; color:#fff; border:none; padding:12px 28px; font-size:15px; border-radius:8px; cursor:pointer; font-weight:bold; }
+  </style></head><body>
+  <div class="noprint"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+  <div class="header">
+    <div class="brand">🍺 Brasserie Méouge<small>HORN Beer — Gorges de la Méouge</small></div>
+    <div class="lot-box"><div class="lot-label">N° de lot</div><div class="lot">${br.numLot||'—'}</div></div>
+  </div>
+  <h1>Fiche de brassin — ${br.nom}${br.biere?' (La '+br.biere+')':''}</h1>
+  <div class="infos">
+    <div class="info"><div class="k">Date de brassage</div><div class="v">${fmtFull(br.date)}</div></div>
+    <div class="info"><div class="k">Date ouverture fermenteur</div><div class="v">${fmtFull(br.datePrete)}</div></div>
+    <div class="info"><div class="k">Bière</div><div class="v">La ${br.biere||'—'}</div></div>
+    <div class="info"><div class="k">Volume</div><div class="v">${br.volume||'—'} L</div></div>
+  </div>
+  <div class="dens">
+    <div class="cell"><div class="k">Densité avant ébu.</div><div class="v">${br.densiteAvant||'—'}</div></div>
+    <div class="cell"><div class="k">Densité initiale</div><div class="v">${br.densiteInit||'—'}</div></div>
+    <div class="cell"><div class="k">Densité finale</div><div class="v">${br.densiteFinale||'—'}</div></div>
+    <div class="cell"><div class="k">Alcool</div><div class="v">${br.alcoolCible||'—'}%</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Ingrédient (nom — lot)</th><th style="text-align:right">Quantité</th></tr></thead>
+    <tbody>
+      ${ligneIngr('malts',br.malts,'🌾 Malts')}
+      ${ligneIngr('houblons',br.houblons,'🌿 Houblons')}
+      ${ligneIngr('epices',br.epices,'🧂 Épices')}
+      ${ligneIngr('levures',br.levures,'🧬 Levures')}
+    </tbody>
+  </table>
+  <div class="sign">
+    <div class="box"><div class="line">Responsable production</div></div>
+    <div class="box"><div class="line">Date & visa</div></div>
+  </div>
+  <div class="footer">
+    <span>Document généré le ${new Date().toLocaleDateString('fr-FR')} par BièreManager</span>
+    <span>Brasserie des Gorges de la Méouge</span>
+  </div>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('Autorise les fenêtres pop-up pour imprimer.');return;}
+  w.document.write(html);
+  w.document.close();
 }
 // Options d'un menu matière (nom + lot)
 function optionsMatiere(cat,selectedId){
@@ -1888,6 +2295,7 @@ function openBrassinModal(id=null){
   document.getElementById('brassin-modal-title').textContent=br?'Modifier brassin':'Nouveau brassin';
   document.getElementById('br-nom').value=br?br.nom:'';
   document.getElementById('br-date').value=br?(br.date||todayStr()):todayStr();
+  document.getElementById('br-date-prete').value=br?(br.datePrete||''):'';
   document.getElementById('br-volume').value=br?(br.volume||''):'';
   // Bière associée
   document.getElementById('br-biere').innerHTML='<option value="">— aucune —</option>'+state.bieres.map(b=>`<option value="${b}"${br&&br.biere===b?' selected':''}>La ${b}</option>`).join('');
@@ -1895,6 +2303,7 @@ function openBrassinModal(id=null){
   document.getElementById('br-dens-init').value=br?(br.densiteInit||''):'';
   document.getElementById('br-dens-finale').value=br?(br.densiteFinale||''):'';
   document.getElementById('br-alcool').value=br?(br.alcoolCible||''):'';
+  updateNumLot();
   // Ingrédients
   ['br-malts-lignes','br-houblons-lignes','br-epices-lignes','br-levures-lignes'].forEach(c=>document.getElementById(c).innerHTML='');
   const cats=[['malts','br-malts-lignes'],['houblons','br-houblons-lignes'],['epices','br-epices-lignes'],['levures','br-levures-lignes']];
@@ -1906,6 +2315,54 @@ function openBrassinModal(id=null){
   document.getElementById('brassin-delete-btn').style.display=id?'block':'none';
   document.getElementById('modal-brassin').classList.add('open');
 }
+// Génère le numéro de lot : lettre bière + AA + MM + JJ (date bière prête)
+function genererNumLot(biere,datePrete){
+  if(!biere||!datePrete)return '';
+  const [y,m,d]=datePrete.split('-');
+  return `${biere}${y.slice(2)}${m}${d}`;
+}
+function updateNumLot(){
+  const biere=document.getElementById('br-biere')?.value;
+  const datePrete=document.getElementById('br-date-prete')?.value;
+  const el=document.getElementById('br-num-lot');
+  if(el)el.value=genererNumLot(biere,datePrete);
+}
+// Parse une quantité texte ("40kg", "500 g", "2.5L") → {valeur, unite}
+function parseQte(txt){
+  if(!txt)return null;
+  const m=(''+txt).replace(',','.').match(/([\d.]+)\s*([a-zA-Zé]*)/);
+  if(!m)return null;
+  return {valeur:parseFloat(m[1]),unite:(m[2]||'').toLowerCase()};
+}
+// Convertit une quantité vers l'unité cible si compatible (kg<->g, L<->ml)
+function convertQte(valeur,uniteSource,uniteCible){
+  uniteSource=(uniteSource||'').toLowerCase();uniteCible=(uniteCible||'').toLowerCase();
+  if(!uniteSource||uniteSource===uniteCible)return valeur;
+  const poids={g:1,kg:1000};const vol={ml:1,l:1000};
+  if(poids[uniteSource]&&poids[uniteCible])return valeur*poids[uniteSource]/poids[uniteCible];
+  if(vol[uniteSource]&&vol[uniteCible])return valeur*vol[uniteSource]/vol[uniteCible];
+  return valeur; // incompatible → on suppose même unité
+}
+// Déduit du stock les ingrédients d'un brassin. Retourne la liste des alertes stock bas.
+function deduireStockBrassin(brassin,sens=1){
+  // sens=1 déduit, sens=-1 réintègre (annulation)
+  const alertes=[];
+  const cats=[['malts','malts'],['houblons','houblons'],['epices','epices'],['levures','levures']];
+  cats.forEach(([catBrassin,catMat])=>{
+    (brassin[catBrassin]||[]).forEach(ing=>{
+      const mat=(state.matieres[catMat]||[]).find(m=>m.id===ing.id);
+      if(!mat)return;
+      const q=parseQte(ing.qte);
+      if(!q||!q.valeur)return;
+      const qConv=convertQte(q.valeur,q.unite||mat.unite,mat.unite)*sens;
+      mat.stock=parseFloat(((mat.stock||0)-qConv).toFixed(3));
+      if(sens===1&&mat.stock<0)alertes.push(`${mat.nom}${mat.lot?' (lot '+mat.lot+')':''} : stock négatif (${mat.stock} ${mat.unite})`);
+      else if(sens===1&&mat.seuil!=null&&mat.stock<=mat.seuil)alertes.push(`${mat.nom} : stock bas (${mat.stock} ${mat.unite})`);
+    });
+  });
+  return alertes;
+}
+
 function saveBrassin(){
   const id=document.getElementById('brassin-edit-id').value;
   const nom=document.getElementById('br-nom').value.trim();
@@ -1914,6 +2371,8 @@ function saveBrassin(){
     id:id||('br'+(state.nextId++)),
     nom,
     date:document.getElementById('br-date').value,
+    datePrete:document.getElementById('br-date-prete').value,
+    numLot:genererNumLot(document.getElementById('br-biere').value,document.getElementById('br-date-prete').value),
     biere:document.getElementById('br-biere').value,
     volume:parseFloat(document.getElementById('br-volume').value)||'',
     densiteAvant:document.getElementById('br-dens-avant').value.trim(),
@@ -1924,15 +2383,30 @@ function saveBrassin(){
     houblons:getIngrLignes('br-houblons-lignes'),
     epices:getIngrLignes('br-epices-lignes'),
     levures:getIngrLignes('br-levures-lignes'),
+    stockDeduit:false
   };
-  if(id)state.brassins=state.brassins.map(x=>x.id===id?obj:x);
-  else state.brassins.push(obj);
+  let alertes=[];
+  if(id){
+    // Modification : réintégrer l'ancien stock puis déduire le nouveau
+    const ancien=state.brassins.find(x=>x.id===id);
+    if(ancien&&ancien.stockDeduit)deduireStockBrassin(ancien,-1);
+    alertes=deduireStockBrassin(obj,1);
+    obj.stockDeduit=true;
+    state.brassins=state.brassins.map(x=>x.id===id?obj:x);
+  }else{
+    alertes=deduireStockBrassin(obj,1);
+    obj.stockDeduit=true;
+    state.brassins.push(obj);
+  }
   save();closeModal('modal-brassin');renderBrassins();
+  if(alertes.length)alert('⚠️ Brassin enregistré. Attention stock :\n\n'+alertes.join('\n'));
 }
 function deleteBrassinFromModal(){
   const id=document.getElementById('brassin-edit-id').value;
   if(!id)return;
-  if(!confirm('Supprimer ce brassin ?'))return;
+  if(!confirm('Supprimer ce brassin ? (le stock utilisé sera réintégré)'))return;
+  const br=state.brassins.find(x=>x.id===id);
+  if(br&&br.stockDeduit)deduireStockBrassin(br,-1); // réintègre le stock
   state.brassins=state.brassins.filter(x=>x.id!==id);
   save();closeModal('modal-brassin');renderBrassins();
 }
@@ -1941,7 +2415,180 @@ function deleteBrassinFromModal(){
 // ================================================================
 // CONFIG
 // ================================================================
+// ================================================================
+// SAUVEGARDE / RESTAURATION
+// ================================================================
+function exporterSauvegarde(){
+  try{
+    const data=JSON.stringify(state,null,2);
+    const blob=new Blob([data],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const d=new Date();
+    const nom=`bieremanager-${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}_${p2(d.getHours())}h${p2(d.getMinutes())}.json`;
+    const a=document.createElement('a');
+    a.href=url;a.download=nom;
+    document.body.appendChild(a);a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    // Mémoriser la date de dernière sauvegarde
+    state.derniereSauvegarde=Date.now();
+    localStorage.setItem(STORE_KEY,JSON.stringify(state));
+    document.getElementById('backup-result').innerHTML='<span style="color:#69F0AE">✅ Sauvegarde téléchargée : '+nom+'</span>';
+    renderConfig();
+  }catch(e){
+    document.getElementById('backup-result').innerHTML='<span style="color:var(--red-light)">❌ Erreur : '+e.message+'</span>';
+  }
+}
+function restaurerSauvegarde(){
+  const input=document.getElementById('restore-file');
+  const res=document.getElementById('backup-result');
+  if(!input.files||!input.files[0]){res.innerHTML='<span style="color:var(--orange)">⚠️ Choisis d\'abord un fichier de sauvegarde</span>';return;}
+  const file=input.files[0];
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data||data.commandes===undefined){res.innerHTML='<span style="color:var(--red-light)">❌ Ce fichier n\'est pas une sauvegarde BièreManager valide</span>';return;}
+      // Compter pour confirmation
+      const nbCmd=(data.commandes||[]).length;
+      const nbClients=(data.clients||[]).length;
+      const nbBrassins=(data.brassins||[]).length;
+      if(!confirm(`Restaurer cette sauvegarde ?\n\n${nbCmd} commande(s), ${nbClients} client(s), ${nbBrassins} brassin(s)\n\n⚠️ Cela remplacera TOUTES tes données actuelles.`))return;
+      state=data;migrate();
+      localStorage.setItem(STORE_KEY,JSON.stringify(state));
+      // Pousser vers Sheets si configuré
+      if(localStorage.getItem(BIN_KEY))pushToSheets();
+      res.innerHTML='<span style="color:#69F0AE">✅ Sauvegarde restaurée ! Toutes tes données sont revenues.</span>';
+      renderDashboard();
+      alert('✅ Restauration réussie !');
+    }catch(err){
+      res.innerHTML='<span style="color:var(--red-light)">❌ Fichier illisible : '+err.message+'</span>';
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ================================================================
+// BIBLIOTHÈQUE D'INGRÉDIENTS (référentiel, dans Config)
+// ================================================================
+// Listes pré-remplies (noms uniquement — l'utilisatrice attribue les codes)
+const INGREDIENTS_PREFILL={
+  malts:['BISCUIT','BLE','BLE TORREFIE','CARA HELL','CARA MD','CARA MUNICH','CARA PILS','CARAFA-I','CARAFA-II','CARAFA-III','CHOCOLAT','CRYSTAL 150','FUME','MALT AROMA','Malt Whisky tourbé','MUNICH','PALE ALE','PILSNER','RED X','ROOST','SEIGLE TORREFIE','SPECIAL B','SPECIAL W','SPECIAL X','VIENNA'],
+  flocons:['AVOINE','BLE/FROMENT','ORGE','SEIGLE'],
+  houblons:['Amarillo','azzaca','Brewer Gold','cascade','centennial','chinook','citra','east kent golding','EL Dorado','Elixir','Galaxy','Hallertau Blanc','Hersbrucker','local','marinka','Mosaic','Motueka','Nectaron','Nugget','Perle','Saaz','Simcoe','Target'],
+  epices:['Badiane','Betterave','Cacao','Café','cannelle','cardamome','Cassis','Cedras confits','Coriandre',"Ecorces d'Orange","Fleurs d'ibiscus",'Gingembre','Girofle','Sarawak','Sichuan','Timut','Vanille'],
+  sucres:['sucre de canne','sucre de coco'],
+  levures:['pour BLANCHE','Pour BRUNE','pour LAGER','Pour NE','Pour Pale Ale','Pour TRIPLE'],
+};
+function prefillIngredients(){
+  if(!confirm('Pré-remplir la bibliothèque avec la liste standard ? (les ingrédients déjà présents ne seront pas dupliqués)'))return;
+  Object.keys(INGREDIENTS_PREFILL).forEach(cat=>{
+    if(!state.matieres[cat])state.matieres[cat]=[];
+    INGREDIENTS_PREFILL[cat].forEach(nom=>{
+      const existe=state.matieres[cat].some(m=>m.nom&&m.nom.toLowerCase()===nom.toLowerCase());
+      if(!existe){
+        state.matieres[cat].push({id:'m'+(state.nextId++),nom,code:'',unite:(cat==='epices'||cat==='levures'?'g':'kg'),seuil:null,lots:[]});
+      }
+    });
+  });
+  save();renderIngredients();
+  alert('✅ Bibliothèque pré-remplie !');
+}
+function renderIngredients(){
+  const el=document.getElementById('ingredients-content');
+  let html='';
+  // Bouton pré-remplissage si vide
+  const totalIngr=MAT_CATS.reduce((s,c)=>s+((state.matieres[c.k]||[]).length),0);
+  if(totalIngr===0){
+    html+=`<div class="card"><div class="card-title">🚀 Démarrage rapide</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Pré-remplis ta bibliothèque avec la liste standard (malts, houblons, épices...). Tu attribueras ensuite les codes.</p>
+      <button class="btn btn-primary" onclick="prefillIngredients()">📋 Pré-remplir la liste standard</button></div>`;
+  }
+  MAT_CATS.forEach(cat=>{
+    if(cat.k==='eau')return; // eau pas de code recette
+    const items=[...(state.matieres[cat.k]||[])].sort((a,b)=>{
+      // Trier par code (numérique) puis nom
+      const ca=a.code||'', cb=b.code||'';
+      if(ca&&cb)return ca.localeCompare(cb,undefined,{numeric:true});
+      if(ca)return -1; if(cb)return 1;
+      return (a.nom||'').localeCompare(b.nom||'');
+    });
+    html+=`<div class="card"><div class="card-title">${cat.icon} ${cat.l} (${items.length})</div>`;
+    if(items.length){
+      html+=items.map(m=>{
+        const codeAff=m.code?`<span style="font-weight:700;color:var(--amber-light);min-width:42px;display:inline-block">${m.code}</span>`:`<span style="color:var(--red-light);font-size:11px;min-width:42px;display:inline-block">(pas de code)</span>`;
+        return `<div class="row" style="padding:7px 0">
+          <div class="row-name" style="display:flex;align-items:center;gap:8px">${codeAff} ${m.nom||'(sans nom)'}</div>
+          <button class="btn btn-secondary btn-sm" onclick="openIngredientModal('${cat.k}','${m.id}')">✏️</button>
+        </div>`;
+      }).join('');
+    }else{
+      html+='<div style="color:var(--text-muted);font-size:12px;margin-bottom:8px">Aucun ingrédient</div>';
+    }
+    html+=`<button class="btn btn-secondary btn-sm" style="margin-top:8px;width:100%" onclick="openIngredientModal('${cat.k}')">➕ Ajouter</button></div>`;
+  });
+  el.innerHTML=html;
+}
+function openIngredientModal(cat,id=null){
+  const m=id?(state.matieres[cat]||[]).find(x=>x.id===id):null;
+  const catInfo=MAT_CATS.find(c=>c.k===cat);
+  document.getElementById('ing-cat').value=cat;
+  document.getElementById('ing-edit-id').value=id||'';
+  document.getElementById('ing-modal-title').textContent=(m?'Modifier ':'Ajouter ')+catInfo.l.toLowerCase().replace(/s$/,'');
+  document.getElementById('ing-nom').value=m?m.nom:'';
+  document.getElementById('ing-code').value=m?(m.code||''):'';
+  document.getElementById('ing-unite').value=m?(m.unite||'kg'):(cat==='epices'||cat==='levures'?'g':'kg');
+  document.getElementById('ing-delete-btn').style.display=id?'block':'none';
+  document.getElementById('modal-ingredient').classList.add('open');
+}
+function saveIngredient(){
+  const cat=document.getElementById('ing-cat').value;
+  const id=document.getElementById('ing-edit-id').value;
+  const nom=document.getElementById('ing-nom').value.trim();
+  if(!nom){alert('Saisis un nom');return;}
+  const code=document.getElementById('ing-code').value.trim().toUpperCase();
+  if(code){
+    for(const k of Object.keys(state.matieres)){
+      const conflit=state.matieres[k].find(x=>x.code===code&&x.id!==id);
+      if(conflit){alert(`⚠️ Le code ${code} est déjà utilisé par "${conflit.nom}".`);return;}
+    }
+  }
+  if(id){
+    const m=state.matieres[cat].find(x=>x.id===id);
+    if(m){m.nom=nom;m.code=code;m.unite=document.getElementById('ing-unite').value;}
+  }else{
+    if(!state.matieres[cat])state.matieres[cat]=[];
+    state.matieres[cat].push({id:'m'+(state.nextId++),nom,code,unite:document.getElementById('ing-unite').value,seuil:null,lots:[]});
+  }
+  save();closeModal('modal-ingredient');renderIngredients();
+}
+function deleteIngredient(){
+  const cat=document.getElementById('ing-cat').value;
+  const id=document.getElementById('ing-edit-id').value;
+  if(!id)return;
+  if(!confirm('Supprimer cet ingrédient de la bibliothèque ?'))return;
+  state.matieres[cat]=state.matieres[cat].filter(x=>x.id!==id);
+  save();closeModal('modal-ingredient');renderIngredients();
+}
+
 function renderConfig(){
+  // Indicateur dernière sauvegarde
+  const ds=document.getElementById('derniere-sauvegarde');
+  if(ds){
+    if(state.derniereSauvegarde){
+      const d=new Date(state.derniereSauvegarde);
+      const now=Date.now();
+      const joursEcoules=Math.floor((now-state.derniereSauvegarde)/(1000*60*60*24));
+      const dateStr=`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()} à ${p2(d.getHours())}h${p2(d.getMinutes())}`;
+      let couleur='#69F0AE',prefix='✅';
+      if(joursEcoules>=14){couleur='#FF8A80';prefix='⚠️';}
+      else if(joursEcoules>=7){couleur='#FFAB40';prefix='⏰';}
+      const ilya=joursEcoules===0?"aujourd'hui":joursEcoules===1?'hier':`il y a ${joursEcoules} jours`;
+      ds.innerHTML=`<span style="color:${couleur}">${prefix} Dernière sauvegarde : ${dateStr} (${ilya})</span>`;
+    }else{
+      ds.innerHTML='<span style="color:var(--orange)">⚠️ Aucune sauvegarde effectuée pour l\'instant</span>';
+    }
+  }
   document.getElementById('param-bin-id').value=localStorage.getItem(BIN_KEY)||'';
   document.getElementById('param-api-key').value=localStorage.getItem(APIKEY_KEY)||'';
   document.getElementById('seuil-10L').value=state.seuils['10L'];
