@@ -2434,8 +2434,10 @@ function renderMatieres(){
           let linfo=l.lot?l.lot:'(sans n°)';
           if(cat.k==='houblons'&&l.analyse&&l.analyse.alpha)linfo+=` · α ${l.analyse.alpha}%`;
           if(l.prix!=null)linfo+=` · ${l.prix}€`;
-          return `<div style="font-size:11px;color:var(--text-muted);padding:3px 0 3px 12px;border-left:2px solid var(--border);margin-left:4px;display:flex;justify-content:space-between">
-            <span>📦 ${linfo}</span><span style="font-weight:600">${l.stock||0} ${unite}</span></div>`;
+          const verif=l.aVerifier?' <span style="color:var(--orange)">⚠️ à vérifier</span>':'';
+          const bord=l.aVerifier?'var(--orange)':'var(--border)';
+          return `<div style="font-size:11px;color:var(--text-muted);padding:3px 0 3px 12px;border-left:2px solid ${bord};margin-left:4px;display:flex;justify-content:space-between">
+            <span>📦 ${linfo}${verif}</span><span style="font-weight:600">${l.stock||0} ${unite}</span></div>`;
         }).join('');
       }
       return `<div style="border-bottom:1px solid var(--border);padding:8px 0">
@@ -2650,7 +2652,7 @@ function confirmImport(){
       if(it.analyse)lot.analyse=it.analyse;
       majLots++;
     }else{
-      lot={id:'lot'+(state.nextId++),lot:numLot,stock:parseFloat(it.stock)||0,prix:it.prix!=null?parseFloat(it.prix):null,analyse:it.analyse||null,date:it.date||todayStr()};
+      lot={id:'lot'+(state.nextId++),lot:numLot,stock:parseFloat(it.stock)||0,prix:it.prix!=null?parseFloat(it.prix):null,analyse:it.analyse||null,date:it.date||todayStr(),aVerifier:it.aVerifier||false};
       ing.lots.push(lot);
       ajoutLots++;
     }
