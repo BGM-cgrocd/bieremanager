@@ -2565,14 +2565,20 @@ function previewImport(){
   }
   // Normaliser : accepter un objet unique ou {items:[...]}
   const cat=data.type||'houblon';
-  const catKey={houblon:'houblons',malt:'malts',epice:'epices',levure:'levures',eau:'eau'}[cat]||'houblons';
+  const catKey={houblon:'houblons',houblons:'houblons',malt:'malts',malts:'malts',epice:'epices',epices:'epices',levure:'levures',levures:'levures',eau:'eau',sucre:'sucres',sucres:'sucres',flocon:'flocons',flocons:'flocons'}[cat]||'houblons';
   const items=Array.isArray(data.items)?data.items:(Array.isArray(data)?data:[data]);
   if(!items.length){prev.innerHTML='<div class="alert alert-red">Aucun élément trouvé</div>';return;}
   importParsed={catKey,items};
   // Aperçu
-  let html='<div class="alert alert-green" style="font-size:12px"><b>'+items.length+' élément(s) à importer :</b><br>';
+  const catLabel=(MAT_CATS.find(c=>c.k===catKey)||{l:catKey}).l;
+  let html='<div class="alert alert-green" style="font-size:12px"><b>'+items.length+' entrée(s) → '+catLabel+' :</b><br>';
   html+=items.map(it=>{
-    let s='• '+(it.nom||'?')+(it.lot?' (lot '+it.lot+')':'');
+    let s='• '+(it.code?it.code+' · ':'')+(it.nom||'?');
+    const det=[];
+    if(it.lot)det.push('lot '+it.lot);
+    if(it.stock)det.push(it.stock+(it.unite||'')+' en stock');
+    if(it.prix!=null)det.push(it.prix+'€');
+    if(det.length)s+=' ('+det.join(', ')+')';
     if(it.analyse){
       const parts=HOP_ANALYSES.filter(h=>it.analyse[h.k]!==undefined).map(h=>`${h.l.split(' ')[0]}: ${it.analyse[h.k]}`);
       if(parts.length)s+='<br>&nbsp;&nbsp;'+parts.join(' · ');
@@ -2605,25 +2611,41 @@ function confirmImport(){
   }
   const {catKey,items}=importParsed;
   if(!state.matieres[catKey])state.matieres[catKey]=[];
-  let ajout=0, maj=0;
+  let ajoutLots=0, majLots=0, nouvIngr=0;
   items.forEach(it=>{
-    if(!it.nom)return;
-    // Chercher un lot existant identique (même nom + même lot) → on ajoute au stock
-    const existant=it.lot?state.matieres[catKey].find(x=>x.nom===it.nom&&x.lot===it.lot):null;
-    if(existant){
-      if(it.stock)existant.stock=(existant.stock||0)+parseFloat(it.stock);
-      if(it.unite)existant.unite=it.unite;
-      if(it.analyse)existant.analyse=it.analyse; // maj analyse si fournie
-      maj++;
+    if(!it.nom&&!it.code)return;
+    // 1) Trouver l'ingrédient existant (par code en priorité, sinon par nom)
+    let ing=null;
+    if(it.code)ing=state.matieres[catKey].find(x=>x.code&&x.code.toUpperCase()===(''+it.code).toUpperCase());
+    if(!ing&&it.nom)ing=state.matieres[catKey].find(x=>x.nom&&x.nom.toLowerCase()===(''+it.nom).toLowerCase());
+    // 2) Créer l'ingrédient s'il n'existe pas
+    if(!ing){
+      ing={id:'m'+(state.nextId++),nom:it.nom||it.code,code:it.code||'',unite:it.unite||(catKey==='epices'||catKey==='levures'?'g':catKey==='eau'?'L':'kg'),seuil:null,lots:[]};
+      state.matieres[catKey].push(ing);
+      nouvIngr++;
+    }
+    if(!ing.lots)ing.lots=[];
+    if(it.unite)ing.unite=it.unite;
+    // 3) Ajouter/compléter le lot sous l'ingrédient
+    const numLot=it.lot||'';
+    let lot=numLot?ing.lots.find(l=>l.lot===numLot):null;
+    if(lot){
+      // lot existant → on ajoute la quantité reçue
+      if(it.stock)lot.stock=parseFloat((( lot.stock||0)+parseFloat(it.stock)).toFixed(3));
+      if(it.prix!=null)lot.prix=parseFloat(it.prix);
+      if(it.analyse)lot.analyse=it.analyse;
+      majLots++;
     }else{
-      const obj={id:'m'+(state.nextId++),nom:it.nom,lot:it.lot||'',stock:parseFloat(it.stock)||0,unite:it.unite||(catKey==='epices'||catKey==='levures'?'g':catKey==='eau'?'L':'kg'),seuil:it.seuil!==undefined?it.seuil:null};
-      if(it.analyse)obj.analyse=it.analyse;
-      state.matieres[catKey].push(obj);
-      ajout++;
+      lot={id:'lot'+(state.nextId++),lot:numLot,stock:parseFloat(it.stock)||0,prix:it.prix!=null?parseFloat(it.prix):null,analyse:it.analyse||null,date:it.date||todayStr()};
+      ing.lots.push(lot);
+      ajoutLots++;
     }
   });
   save();closeModal('modal-import');renderMatieres();
-  alert(`✅ ${ajout} ajout(s)${maj?', '+maj+' stock(s) mis à jour':''} !`);
+  let msg=`✅ ${ajoutLots} lot(s) ajouté(s)`;
+  if(majLots)msg+=`, ${majLots} lot(s) complété(s)`;
+  if(nouvIngr)msg+=`, ${nouvIngr} nouvel(s) ingrédient(s)`;
+  alert(msg+' !');
 }
 
 
