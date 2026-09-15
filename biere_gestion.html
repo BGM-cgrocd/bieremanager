@@ -21,7 +21,8 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min-height:100vh;max-width:480px;margin:0 auto}
-.header{background:linear-gradient(135deg,var(--dark2),var(--mid));padding:16px 20px 12px;border-bottom:2px solid var(--amber);position:sticky;top:0;z-index:100}
+.topbar{position:sticky;top:0;z-index:100}
+.header{background:linear-gradient(135deg,var(--dark2),var(--mid));padding:16px 20px 12px;border-bottom:2px solid var(--amber)}
 .header-top{display:flex;align-items:center;justify-content:space-between}
 .logo{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--amber-light);letter-spacing:2px}
 .logo span{color:var(--text-muted);font-size:13px;font-family:'Inter',sans-serif;letter-spacing:0;display:block}
@@ -109,9 +110,10 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 </style>
 </head>
 <body>
+<div class="topbar">
 <div class="header">
   <div class="header-top">
-    <div class="logo">🍺 BièreManager<span>Location fûts & tireuses</span></div>
+    <div class="logo">🍺 BièreManager<span>HORN Beer — Gestion Brasserie</span></div>
     <div style="text-align:right">
       <div class="date-badge" id="todayDate"></div>
       <div id="sync-status" style="font-size:10px;font-weight:600;margin-top:3px"></div>
@@ -129,6 +131,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
   <div class="tab" onclick="showTab('futs')">🛢️ Fûts</div>
   <div class="tab" onclick="showTab('brassage')">🧪 Brassage</div>
   <div class="tab" onclick="showTab('config')">⚙️ Config</div>
+</div>
 </div>
 
 <!-- DASHBOARD -->
@@ -1482,35 +1485,53 @@ function clientBieres(c){
 }
 // Ligne de tireuse pour un client fixe (type générique OU inox précise)
 function addClientTireuseLigne(sel=null){
-  // sel = {tirId} ou ancien {type,inoxId}
+  // sel = {tirId} ou {type} (sans numéro précis) ou ancien {type,inoxId}
   let selType='',selId='';
   if(sel){
-    if(sel.tirId){selId=sel.tirId;const t=state.tireuses.find(x=>x.id===selId);selType=t?t.type:'';}
+    if(sel.tirId){selId=sel.tirId;const t=state.tireuses.find(x=>x.id===selId);selType=t?t.type:(sel.type||'');}
     else if(sel.type){selType=sel.type;selId=sel.inoxId||'';}
   }
   const typeOpts=`<option value="">— type —</option>
     <option value="10L"${selType==='10L'?' selected':''}>10L</option>
     <option value="3L"${selType==='3L'?' selected':''}>3L</option>
     <option value="inox"${selType==='inox'?' selected':''}>Inox</option>`;
-  const nomOpts=selType?optionsNomTireuse(selType,selId,'client'):'<option value="">— choisir type d\'abord —</option>';
+  const nomOpts=selType?optionsNomTireuseClient(selType,selId):'<option value="">— choisir type d\'abord —</option>';
   const div=document.createElement('div');
   div.className='tir-line';
+  div.dataset.type=selType;
   div.innerHTML=`<select class="form-select tir-type" onchange="onClientTypeChange(this)">${typeOpts}</select>
     <select class="form-select tir-nom">${nomOpts}</select>
     <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove()">✕</button>`;
   document.getElementById('cl-tireuses-lignes').appendChild(div);
 }
+// Options nom pour un client : ajoute "sans numéro précis" en tête
+function optionsNomTireuseClient(type,selectedId){
+  let opts=`<option value="__type__"${!selectedId?' selected':''}>— sans numéro précis —</option>`;
+  state.tireuses.filter(t=>t.type===type).forEach(t=>{
+    const chez=clientDeTireuse(t.id);
+    if(chez&&t.id!==selectedId)return;
+    opts+=`<option value="${t.id}"${t.id===selectedId?' selected':''}>${libelleTireuse(t)}${t.etat==='panne'?' 🔴':t.etat==='entretien'?' 🔧':''}</option>`;
+  });
+  return opts;
+}
 function onClientTypeChange(sel){
   const line=sel.parentElement;
   const type=sel.value;
+  line.dataset.type=type;
   const nomSel=line.querySelector('.tir-nom');
-  nomSel.innerHTML=type?optionsNomTireuse(type,null,'client'):'<option value="">— choisir type d\'abord —</option>';
+  nomSel.innerHTML=type?optionsNomTireuseClient(type,null):'<option value="">— choisir type d\'abord —</option>';
 }
 function getClientTireusesLignes(){
   return [...document.querySelectorAll('#cl-tireuses-lignes .tir-line')].map(div=>{
-    const tirId=div.querySelector('.tir-nom').value;
-    if(!tirId)return null;
-    return {tirId};
+    const val=div.querySelector('.tir-nom').value;
+    const type=div.dataset.type||div.querySelector('.tir-type').value;
+    if(!val&&!type)return null;
+    // "sans numéro précis" → on enregistre juste le type
+    if(val==='__type__'||!val){
+      if(!type)return null;
+      return {type};
+    }
+    return {tirId:val};
   }).filter(t=>t);
 }
 function openClientModal(){
@@ -1850,7 +1871,7 @@ function renderBrassage(){
       <button class="btn ${brassageSubTab==='brassins'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('brassins')">🍺 Brassins</button>
       <button class="btn ${brassageSubTab==='recettes'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('recettes')">📖 Recettes</button>
       <button class="btn ${brassageSubTab==='matieres'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('matieres')">📦 Matières</button>
-      <button class="btn ${brassageSubTab==='calcul'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('calcul')">🧮 Houblon</button>
+      <button class="btn ${brassageSubTab==='calcul'?'btn-primary':'btn-secondary'} btn-sm" style="flex:1;margin:0;padding:9px 3px;font-size:11px" onclick="setBrassageSub('calcul')">🌿 Houblons</button>
     </div>
     <div id="brassage-sub"></div>`;
   if(brassageSubTab==='brassins')renderBrassins();
@@ -2391,31 +2412,63 @@ function deleteRecetteFromModal(){
 
 // ===== CALCUL AJUSTEMENT HOUBLON =====
 function renderCalculHoublon(){
+  // Carte d'identité des houblons — regroupe les lots avec analyses complètes
   const houblons=state.matieres.houblons||[];
-  const optsRef=houblons.filter(h=>h.analyse&&h.analyse.alpha).map(h=>`<option value="${h.id}">${h.nom}${h.lot?' (lot '+h.lot+')':''} — ${h.analyse.alpha}% α</option>`).join('');
-  document.getElementById('brassage-sub').innerHTML=`
-    <div class="card">
-      <div class="card-title">🧮 Ajuster une quantité de houblon</div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Adapte la quantité selon la teneur en acides alpha du nouveau lot, pour garder la même amertume.</p>
+  // Liste tous les lots ayant une analyse (au moins alpha)
+  const cartes=[];
+  houblons.forEach(h=>{
+    (h.lots||[]).forEach(l=>{
+      if(l.analyse&&Object.keys(l.analyse).length){
+        cartes.push({nom:h.nom,code:h.code,lot:l.lot,stock:l.stock,unite:h.unite,analyse:l.analyse});
+      }
+    });
+  });
+  cartes.sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
 
-      <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin-bottom:8px">📋 Recette de référence</div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Quantité d'origine (g)</label>
-          <input type="number" class="form-input" id="calc-qte-ref" min="0" step="1" oninput="doCalcHoublon()" placeholder="Ex: 500"></div>
-        <div class="form-group"><label class="form-label">Alpha de référence (%)</label>
-          <input type="number" class="form-input" id="calc-alpha-ref" min="0" step="0.1" oninput="doCalcHoublon()" placeholder="Ex: 12"></div>
-      </div>
+  let html=`<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Carte d'identité des houblons dont tu as les bulletins d'analyse (acides alpha + profil d'huiles).</p>`;
+  if(!cartes.length){
+    html+='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucune analyse enregistrée. Importe les bulletins d\'analyse.</div>';
+  }else{
+    cartes.forEach(c=>{
+      const a=c.analyse;
+      // Barres visuelles pour les huiles principales
+      const huiles=[
+        {k:'myrcene',l:'Myrcène',c:'#4CAF50'},
+        {k:'humulene',l:'Humulène',c:'#FF9800'},
+        {k:'caryophyllene',l:'Caryophyllène',c:'#9C27B0'},
+        {k:'farnesene',l:'Farnésène',c:'#00BCD4'},
+        {k:'linalol',l:'Linalol',c:'#E91E63'},
+        {k:'geraniol',l:'Géraniol',c:'#8BC34A'},
+      ];
+      const maxHuile=Math.max(...huiles.map(h=>a[h.k]||0),1);
+      let huilesHtml=huiles.filter(h=>a[h.k]!=null).map(h=>{
+        const pct=(a[h.k]/maxHuile)*100;
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span style="font-size:11px;width:100px;color:var(--text-muted)">${h.l}</span>
+          <div style="flex:1;height:14px;background:var(--dark2);border-radius:7px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${h.c};border-radius:7px"></div>
+          </div>
+          <span style="font-size:11px;font-weight:600;width:42px;text-align:right">${a[h.k]}%</span>
+        </div>`;
+      }).join('');
+      if(a.thiols!=null)huilesHtml+=`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">🧪 Thiols : <b style="color:var(--text)">${a.thiols} ng/L</b></div>`;
 
-      <div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:10px 0 8px">🌿 Nouveau lot</div>
-      <div class="form-group"><label class="form-label">Choisir un houblon en stock</label>
-        <select class="form-select" id="calc-houblon" onchange="applyCalcHoublon()">
-          <option value="">— saisie manuelle —</option>${optsRef}
-        </select></div>
-      <div class="form-group"><label class="form-label">Alpha du nouveau lot (%)</label>
-        <input type="number" class="form-input" id="calc-alpha-new" min="0" step="0.1" oninput="doCalcHoublon()" placeholder="Ex: 17.6"></div>
-
-      <div id="calc-result" style="margin-top:14px"></div>
-    </div>`;
+      html+=`<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-size:17px;font-weight:700;color:var(--amber-light)">🌿 ${c.nom}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${c.code?c.code+' · ':''}Lot ${c.lot||'?'}${c.stock!=null?' · '+c.stock+c.unite+' en stock':''}</div>
+          </div>
+          <div style="text-align:center;background:var(--dark2);border-radius:8px;padding:6px 12px;border:1px solid var(--amber)">
+            <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase">Acides α</div>
+            <div style="font-size:20px;font-weight:700;color:var(--amber-light)">${a.alpha!=null?a.alpha+'%':'—'}</div>
+          </div>
+        </div>
+        ${huilesHtml?'<div style="font-size:11px;font-weight:700;color:var(--amber-light);margin:8px 0 6px">🛢️ Profil d\'huiles</div>'+huilesHtml:'<div style="font-size:11px;color:var(--text-muted)">Profil d\'huiles non renseigné pour ce lot</div>'}
+      </div>`;
+    });
+  }
+  document.getElementById('brassage-sub').innerHTML=html;
 }
 function applyCalcHoublon(){
   const id=document.getElementById('calc-houblon').value;
@@ -2839,11 +2892,14 @@ function imprimerBrassin(id){
     td.cat { background:#faf6ee; font-weight:bold; color:#8B5610; }
     td.q { text-align:right; font-weight:bold; white-space:nowrap; }
     td.lot { color:#666; font-size:10px; }
-    .dens { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:14px; }
+    .dens { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; }
     .dens .cell { border:1px solid #ddd; border-radius:6px; padding:6px; text-align:center; }
     .dens .cell .k { font-size:8px; color:#888; text-transform:uppercase; }
     .dens .cell .v { font-size:14px; font-weight:bold; color:#C97D1A; }
-    .cout { background:#f0f7f0; border:1px solid #2E7D32; border-radius:6px; padding:8px; margin-bottom:12px; font-size:12px; text-align:center; }
+    .ingr-table { width:auto; min-width:60%; max-width:100%; }
+    .ingr-table th:first-child, .ingr-table td:first-child { min-width:180px; }
+    .ingr-table td.q { padding-right:16px; }
+    .cout { background:#f0f7f0; border:1px solid #2E7D32; border-radius:6px; padding:8px; margin:14px 0; font-size:12px; text-align:center; }
     .footer { margin-top:20px; border-top:1px solid #ddd; padding-top:8px; font-size:9px; color:#999; display:flex; justify-content:space-between; }
     .sign { margin-top:22px; display:flex; justify-content:space-between; }
     .sign .box { width:45%; }
@@ -2871,21 +2927,20 @@ function imprimerBrassin(id){
     <div class="cell"><div class="k">Dens. initiale</div><div class="v">${br.densiteInit||'—'}</div></div>
     <div class="cell"><div class="k">Dens. finale</div><div class="v">${br.densiteFinale||'—'}</div></div>
     <div class="cell"><div class="k">TAV calculé</div><div class="v">${tav!=null?tav.toFixed(1)+'%':'—'}</div></div>
-    <div class="cell"><div class="k">Réf. recette</div><div class="v" style="font-size:11px">${r&&r.ref?r.ref:'—'}</div></div>
   </div>
-  ${coutHtml}
   <div class="section-title">📋 Ingrédients (par étape du process)</div>
-  <table>
-    <thead><tr><th>Ingrédient</th><th style="text-align:right">Quantité</th><th>N° lot utilisé</th></tr></thead>
+  <table class="ingr-table">
+    <thead><tr><th>Ingrédient</th><th style="text-align:right">Qté</th><th>N° lot</th></tr></thead>
     <tbody>${ingrTable||'<tr><td colspan="3" style="text-align:center;color:#999">Aucun ingrédient</td></tr>'}</tbody>
   </table>
   ${paliersHtml}
+  ${coutHtml}
   <div class="sign">
     <div class="box"><div class="line">Responsable production</div></div>
     <div class="box"><div class="line">Date & visa</div></div>
   </div>
   <div class="footer">
-    <span>Document généré le ${new Date().toLocaleDateString('fr-FR')} par BièreManager</span>
+    <span>BièreManager</span>
     <span>Brasserie des Gorges de la Méouge — HORN Beer</span>
   </div>
   </body></html>`;
