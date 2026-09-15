@@ -1940,10 +1940,16 @@ function optionsLots(code){
 function brasserDepuisRecette(id){
   const r=state.recettes.find(x=>x.id===id);
   if(!r)return;
+  // Réactiver le mode édition (au cas où on venait d'une vue lecture seule)
+  const volSel=document.getElementById('br2-volume');
+  volSel.disabled=false;
+  document.querySelector('#modal-brassin-recette button[onclick="validerBrassinRecette()"]').style.display='block';
   document.getElementById('br2-title').textContent='🍺 Brassin : '+r.nom;
   document.getElementById('br2-recette-id').value=id;
   document.getElementById('br2-date').value=todayStr();
   document.getElementById('br2-volume').value=r.volumeBase||1000;
+  const cont=document.getElementById('br2-etapes');
+  if(cont)cont.dataset.lastvol=r.volumeBase||1000;
   renderBrassinRecetteEtapes(r);
   document.getElementById('modal-brassin-recette').classList.add('open');
 }
@@ -2010,6 +2016,50 @@ function recalcBrassinRecette(){
   const el=document.getElementById('br2-cout');
   if(cout>0)el.innerHTML=`<div class="alert alert-green" style="font-size:13px">💰 Coût matières : <b>${cout.toFixed(2)} €</b> — ${(cout/vol).toFixed(3)} €/L</div>`;
   else el.innerHTML='';
+}
+// Affiche un brassin issu de recette (lecture seule, tout conservé)
+function voirBrassinRecette(id){
+  const br=state.brassins.find(x=>x.id===id);
+  if(!br)return;
+  document.getElementById('br2-title').textContent='🍺 '+br.nom;
+  document.getElementById('br2-recette-id').value='';
+  document.getElementById('br2-date').value=br.date||'';
+  // Volume (fixé)
+  const volSel=document.getElementById('br2-volume');
+  volSel.value=br.volume||1000;
+  // Regrouper les ingrédients par étape
+  let html='';
+  const parEtape={};
+  (br.ingredients||[]).forEach(ing=>{
+    if(!parEtape[ing.etape])parEtape[ing.etape]=[];
+    parEtape[ing.etape].push(ing);
+  });
+  ETAPES_BRASSAGE.forEach(e=>{
+    const list=parEtape[e.k]||[];
+    if(!list.length)return;
+    html+=`<div style="font-size:13px;font-weight:700;color:var(--amber-light);margin:12px 0 6px">${e.icon} ${e.l}</div>`;
+    html+=list.map(ing=>{
+      const info=matParCode(ing.code);
+      const unite=info?(info.mat.unite||''):'';
+      return `<div style="background:var(--dark2);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600">${info&&info.mat.code?info.mat.code+' · ':''}${ing.nom||ing.code}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:3px">
+          Quantité : <b style="color:var(--text)">${ing.qte} ${unite}</b>${ing.lot?' · Lot : <b style="color:var(--text)">'+ing.lot+'</b>':''}
+        </div>
+      </div>`;
+    }).join('');
+  });
+  document.getElementById('br2-etapes').innerHTML=html;
+  // Infos bière/densités en haut
+  const info=`<div class="alert alert-blue" style="font-size:12px">
+    🍺 Bière : <b>La ${br.biere||'—'}</b> · Volume : <b>${br.volume||'—'} L</b>
+    ${br.densiteInit?' · DI '+br.densiteInit:''}${br.densiteFinale?' · DF '+br.densiteFinale:''}
+    ${br.numLot?'<br>🏷️ Lot : <b>'+br.numLot+'</b>':''}</div>`;
+  document.getElementById('br2-cout').innerHTML=info;
+  // Cacher les boutons d'action (lecture seule) et le sélecteur de volume actif
+  volSel.disabled=true;
+  document.querySelector('#modal-brassin-recette button[onclick="validerBrassinRecette()"]').style.display='none';
+  document.getElementById('modal-brassin-recette').classList.add('open');
 }
 function validerBrassinRecette(){
   const id=document.getElementById('br2-recette-id').value;
@@ -2530,10 +2580,13 @@ function renderBrassins(){
     html+='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucun brassin enregistré</div>';
   }else{
     html+=bs.map(br=>{
-      const nbIngr=(br.malts?.length||0)+(br.houblons?.length||0)+(br.epices?.length||0);
+      const nbIngr=br.depuisRecette?(br.ingredients?.length||0):((br.malts?.length||0)+(br.houblons?.length||0)+(br.epices?.length||0));
+      const editBtn=br.depuisRecette
+        ?`<button class="icon-btn" onclick="voirBrassinRecette('${br.id}')" title="Voir">👁️</button>`
+        :`<button class="icon-btn" onclick="openBrassinModal('${br.id}')">✏️</button>`;
       return `<div class="cmd-item">
         <div class="cmd-top"><div class="cmd-client">${br.nom}${br.biere?' · La '+br.biere:''}</div>
-          <div style="display:flex"><button class="icon-btn" onclick="openBrassinModal('${br.id}')">✏️</button>
+          <div style="display:flex">${editBtn}
           <button class="icon-btn" onclick="deleteBrassin('${br.id}')">🗑</button></div></div>
         <div class="cmd-date">${br.date?'Brassé le '+fmtDate(br.date):''}${br.volume?' · '+br.volume+'L':''}</div>
         <div class="tags">
@@ -2729,6 +2782,21 @@ function convertQte(valeur,uniteSource,uniteCible){
 function deduireStockBrassin(brassin,sens=1){
   // sens=1 déduit, sens=-1 réintègre (annulation)
   const alertes=[];
+  // CAS 1 : brassin issu d'une recette (ingredients[] avec lotId précis)
+  if(brassin.depuisRecette&&Array.isArray(brassin.ingredients)){
+    brassin.ingredients.forEach(ing=>{
+      if(!ing.lotId)return;
+      const info=matParCode(ing.code);
+      if(!info)return;
+      const lot=(info.mat.lots||[]).find(l=>l.id===ing.lotId);
+      if(!lot)return;
+      const q=parseFloat(ing.qte)||0;
+      lot.stock=parseFloat(((lot.stock||0)-q*sens).toFixed(3));
+      if(sens===1&&lot.stock<0)alertes.push(`${ing.nom} (lot ${lot.lot||''}) : stock négatif (${lot.stock})`);
+    });
+    return alertes;
+  }
+  // CAS 2 : ancien format (malts/houblons/epices/levures)
   const cats=[['malts','malts'],['houblons','houblons'],['epices','epices'],['levures','levures']];
   cats.forEach(([catBrassin,catMat])=>{
     (brassin[catBrassin]||[]).forEach(ing=>{
