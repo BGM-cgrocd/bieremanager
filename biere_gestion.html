@@ -2031,8 +2031,11 @@ function renderBrassinRecetteEtapes(r,brassinExistant){
         const qteVal=exist?exist.qte:qteTheo;
         const estReelle=exist&&Math.abs(parseFloat(exist.qte)-qteTheo)>0.0001;
         const lotSel=exist?exist.lotId:'';
-        return `<div style="background:var(--dark2);border-radius:8px;padding:8px 10px;margin-bottom:6px" data-etape="${e.k}" data-code="${ing.code}">
-          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${info&&info.mat.code?info.mat.code+' · ':''}${nom}</div>
+        // Houblon amérisant avec alpha de référence → ajustement auto possible
+        const estAmerisant=(e.k==='start'||e.k==='middle')&&ing.alphaRef!=null&&ing.alphaRef>0;
+        const alphaData=estAmerisant?` data-alpharef="${ing.alphaRef}" data-qtetheo="${qteTheo.toFixed(3)}"`:'';
+        return `<div style="background:var(--dark2);border-radius:8px;padding:8px 10px;margin-bottom:6px" data-etape="${e.k}" data-code="${ing.code}"${alphaData}>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${info&&info.mat.code?info.mat.code+' · ':''}${nom}${estAmerisant?' <span style="font-size:10px;color:var(--amber-light)">🎯 amérisant (α réf '+ing.alphaRef+'%)</span>':''}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center">
             <div>
               <label style="font-size:10px;color:var(--text-muted)">Quantité (${unite})</label>
@@ -2040,9 +2043,10 @@ function renderBrassinRecetteEtapes(r,brassinExistant){
             </div>
             <div>
               <label style="font-size:10px;color:var(--text-muted)">N° de lot utilisé</label>
-              <select class="form-select br2-lot" style="font-size:12px;padding:8px">${optionsLots(ing.code,lotSel)}</select>
+              <select class="form-select br2-lot" style="font-size:12px;padding:8px" onchange="suggererDoseHoublon(this)">${optionsLots(ing.code,lotSel)}</select>
             </div>
           </div>
+          <div class="br2-suggestion" style="margin-top:6px"></div>
         </div>`;
       }).join('');
     }
@@ -2060,6 +2064,42 @@ function renderBrassinRecetteEtapes(r,brassinExistant){
     }
   });
   document.getElementById('br2-etapes').innerHTML=html;
+  recalcBrassinRecette();
+}
+// Suggère la dose de houblon amérisant selon l'alpha réel du lot choisi
+function suggererDoseHoublon(sel){
+  const bloc=sel.closest('[data-code]');
+  if(!bloc)return;
+  const suggDiv=bloc.querySelector('.br2-suggestion');
+  const alphaRef=parseFloat(bloc.dataset.alpharef);
+  const qteTheo=parseFloat(bloc.dataset.qtetheo);
+  if(!alphaRef||!qteTheo){if(suggDiv)suggDiv.innerHTML='';return;}
+  const lotId=sel.value;
+  if(!lotId){if(suggDiv)suggDiv.innerHTML='';return;}
+  const code=bloc.dataset.code;
+  const info=matParCode(code);
+  if(!info){if(suggDiv)suggDiv.innerHTML='';return;}
+  const lot=(info.mat.lots||[]).find(l=>l.id===lotId);
+  if(!lot||!lot.analyse||!lot.analyse.alpha){
+    if(suggDiv)suggDiv.innerHTML='<div style="font-size:11px;color:var(--orange)">⚠️ Ce lot n\'a pas d\'alpha renseigné — pas d\'ajustement possible</div>';
+    return;
+  }
+  const alphaLot=parseFloat(lot.analyse.alpha);
+  // Quantité ajustée = quantité théorique × (alpha réf / alpha lot)
+  const qteAjustee=qteTheo*(alphaRef/alphaLot);
+  const inp=bloc.querySelector('.br2-qte');
+  if(suggDiv){
+    suggDiv.innerHTML=`<div style="background:rgba(33,150,243,0.15);border:1px solid #1565C0;border-radius:6px;padding:6px 8px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
+      <span>🎯 Lot α ${alphaLot}% → suggéré : <b>${qteAjustee.toFixed(3)} ${info.mat.unite||''}</b></span>
+      <button type="button" class="btn btn-primary" style="width:auto;padding:4px 10px;font-size:11px;margin:0" onclick="appliquerDose(this,${qteAjustee.toFixed(3)})">Appliquer</button>
+    </div>`;
+  }
+}
+function appliquerDose(btn,qte){
+  const bloc=btn.closest('[data-code]');
+  const inp=bloc.querySelector('.br2-qte');
+  inp.value=qte;
+  marquerQteReelle(inp);
   recalcBrassinRecette();
 }
 function marquerQteReelle(inp){
@@ -2220,7 +2260,7 @@ function openRecetteModal(id){
   ETAPES_BRASSAGE.forEach(e=>{
     document.getElementById('rec-etape-'+e.k).innerHTML='';
     const list=(r&&r.etapes&&r.etapes[e.k])?r.etapes[e.k]:[];
-    list.forEach(ing=>addIngrRecetteLigne(e.k,ing.code,ing.qte));
+    list.forEach(ing=>addIngrRecetteLigne(e.k,ing.code,ing.qte,ing.alphaRef!==undefined?ing.alphaRef:''));
   });
   // Paliers
   document.getElementById('rec-paliers').innerHTML='';
@@ -2234,13 +2274,24 @@ function openRecetteModal(id){
   document.getElementById('modal-recette').classList.add('open');
 }
 // Ligne ingrédient dans une étape
-function addIngrRecetteLigne(etapeKey,code=null,qte=''){
+function addIngrRecetteLigne(etapeKey,code=null,qte='',alphaRef=''){
   const etape=ETAPES_BRASSAGE.find(e=>e.k===etapeKey);
   const div=document.createElement('div');
-  div.className='biere-line';
-  div.innerHTML=`<select class="form-select ingr-rec-sel" onchange="updateCoutRecette()">${optionsIngredient(etape.cats,code)}</select>
-    <input type="number" step="0.001" class="form-input ingr-rec-qte" value="${qte}" placeholder="kg" oninput="updateCoutRecette()">
-    <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove();updateCoutRecette()">✕</button>`;
+  // Houblon amérisant = étapes START/MIDDLE → champ alpha de référence
+  const estAmerisant=(etapeKey==='start'||etapeKey==='middle')&&etape.cats.includes('houblons');
+  if(estAmerisant){
+    div.className='biere-line';
+    div.style.gridTemplateColumns='1fr 60px 60px 26px';
+    div.innerHTML=`<select class="form-select ingr-rec-sel" onchange="updateCoutRecette()">${optionsIngredient(etape.cats,code)}</select>
+      <input type="number" step="0.001" class="form-input ingr-rec-qte" value="${qte}" placeholder="kg" oninput="updateCoutRecette()" title="Quantité">
+      <input type="number" step="0.1" class="form-input ingr-rec-alpha" value="${alphaRef}" placeholder="α réf" title="Alpha de référence (%) pour ajustement auto">
+      <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove();updateCoutRecette()">✕</button>`;
+  }else{
+    div.className='biere-line';
+    div.innerHTML=`<select class="form-select ingr-rec-sel" onchange="updateCoutRecette()">${optionsIngredient(etape.cats,code)}</select>
+      <input type="number" step="0.001" class="form-input ingr-rec-qte" value="${qte}" placeholder="kg" oninput="updateCoutRecette()">
+      <button type="button" class="remove-biere-btn" onclick="this.parentElement.remove();updateCoutRecette()">✕</button>`;
+  }
   document.getElementById('rec-etape-'+etapeKey).appendChild(div);
 }
 // Ligne palier
@@ -2258,7 +2309,10 @@ function getEtapeIngredients(etapeKey){
     const code=div.querySelector('.ingr-rec-sel').value;
     const qte=parseFloat(div.querySelector('.ingr-rec-qte').value)||0;
     if(!code||qte<=0)return null;
-    return {code,qte};
+    const alphaEl=div.querySelector('.ingr-rec-alpha');
+    const obj={code,qte};
+    if(alphaEl&&alphaEl.value!=='')obj.alphaRef=parseFloat(alphaEl.value);
+    return obj;
   }).filter(x=>x);
 }
 function getPaliers(){
