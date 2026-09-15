@@ -2394,9 +2394,23 @@ function prixIngredient(m){
   return m.prix!=null?m.prix:null;
 }
 
+function reinitStocks(){
+  if(!confirm('🔄 Vider TOUS les lots (stocks, prix, analyses) de TOUTES les matières ?\n\nLes ingrédients et leurs codes sont conservés. Tu pourras réimporter proprement.'))return;
+  let nb=0;
+  Object.keys(state.matieres).forEach(cat=>{
+    (state.matieres[cat]||[]).forEach(m=>{
+      if(m.lots&&m.lots.length){nb+=m.lots.length;m.lots=[];}
+    });
+  });
+  save();renderMatieres();
+  alert(`✅ ${nb} lot(s) vidé(s). Les ingrédients et codes sont conservés.`);
+}
 function renderMatieres(){
   let html='';
-  html+=`<button class="btn btn-primary" style="margin-bottom:12px" onclick="openImportModal()">📥 Importer (bulletin / livraison)</button>`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="btn btn-primary" style="flex:1;margin:0" onclick="openImportModal()">📥 Importer (bulletin / livraison)</button>
+    <button class="btn btn-secondary" style="flex:0 0 auto;margin:0;color:var(--red-light)" onclick="reinitStocks()" title="Vider les lots">🔄 Vider stocks</button>
+  </div>`;
   MAT_CATS.forEach(cat=>{
     const items=[...(state.matieres[cat.k]||[])].sort((a,b)=>(a.code||'zzz').localeCompare(b.code||'zzz',undefined,{numeric:true}));
     html+=`<div class="card"><div class="card-title">${cat.icon} ${cat.l}</div>`;
