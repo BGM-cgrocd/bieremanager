@@ -2507,7 +2507,7 @@ function doCalcHoublon(){
 
 // ===== MATIÈRES PREMIÈRES =====
 // Stock total d'un ingrédient (somme de ses lots)
-function stockIngredient(m){return (m.lots||[]).reduce((s,l)=>s+(parseFloat(l.stock)||0),0);}
+function stockIngredient(m){return parseFloat((m.lots||[]).reduce((s,l)=>s+(parseFloat(l.stock)||0),0).toFixed(3));}
 // Prix moyen d'un ingrédient (moyenne pondérée des lots avec prix, sinon prix ingrédient)
 function prixIngredient(m){
   const lotsAvecPrix=(m.lots||[]).filter(l=>l.prix!=null&&l.stock>0);
@@ -2610,7 +2610,7 @@ function renderLotsLignes(){
     return `<div style="background:var(--dark2);border-radius:8px;padding:10px;margin-bottom:8px">
       <div class="form-row">
         <div class="form-group"><label class="form-label">N° de lot</label><input type="text" class="form-input" oninput="matLotsTemp[${i}].lot=this.value" value="${l.lot||''}" placeholder="Ex: PC1-..."></div>
-        <div class="form-group"><label class="form-label">Quantité</label><input type="number" step="0.01" min="0" class="form-input" oninput="matLotsTemp[${i}].stock=parseFloat(this.value)||0" value="${l.stock||''}" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Quantité</label><input type="number" step="0.01" class="form-input" oninput="matLotsTemp[${i}].stock=parseFloat(this.value)||0" value="${l.stock||''}" placeholder="0"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Prix (€/unité)</label><input type="number" step="0.01" min="0" class="form-input" oninput="matLotsTemp[${i}].prix=this.value!==''?parseFloat(this.value):null" value="${l.prix!=null?l.prix:''}" placeholder="Ex: 45"></div>
@@ -2709,7 +2709,8 @@ function previewImport(){
   const catKey={houblon:'houblons',houblons:'houblons',malt:'malts',malts:'malts',epice:'epices',epices:'epices',levure:'levures',levures:'levures',eau:'eau',sucre:'sucres',sucres:'sucres',flocon:'flocons',flocons:'flocons'}[cat]||'houblons';
   const items=Array.isArray(data.items)?data.items:(Array.isArray(data)?data:[data]);
   if(!items.length){prev.innerHTML='<div class="alert alert-red">Aucun élément trouvé</div>';return;}
-  importParsed={catKey,items};
+  const modeInv=data.mode==='inventaire';
+  importParsed={catKey,items,modeInv};
   // Aperçu
   const catLabel=(MAT_CATS.find(c=>c.k===catKey)||{l:catKey}).l;
   let html='<div class="alert alert-green" style="font-size:12px"><b>'+items.length+' entrée(s) → '+catLabel+' :</b><br>';
@@ -2717,7 +2718,7 @@ function previewImport(){
     let s='• '+(it.code?it.code+' · ':'')+(it.nom||'?');
     const det=[];
     if(it.lot)det.push('lot '+it.lot);
-    if(it.stock)det.push(it.stock+(it.unite||'')+' en stock');
+    if(it.stock!=null&&it.stock!=='')det.push(it.stock+(it.unite||'')+(modeInv?' (inventaire)':' en stock'));
     if(it.prix!=null)det.push(it.prix+'€');
     if(det.length)s+=' ('+det.join(', ')+')';
     if(it.analyse){
@@ -2727,8 +2728,38 @@ function previewImport(){
     return s;
   }).join('<br>');
   html+='</div>';
+  if(modeInv){
+    html='<div class="alert alert-orange" style="font-size:12px">📋 <b>Mode inventaire</b> : les quantités <b>remplacent</b> le stock des lots (au lieu de s\'ajouter).</div>'+html;
+    const zeros=lotsARemettreAZero(catKey,items);
+    if(zeros.length)html+='<div class="alert alert-orange" style="font-size:12px"><b>'+zeros.length+' lot(s) absent(s) de l\'inventaire seront remis à 0 :</b><br>'+zeros.map(z=>'• '+z.nom+' · lot '+(z.lot.lot||'(sans n°)')+' ('+(z.lot.stock||0)+' → 0)').join('<br>')+'</div>';
+  }
   prev.innerHTML=html;
   document.getElementById('import-confirm-btn').style.display='block';
+}
+// Trouve l'ingrédient visé par une ligne d'import (code prioritaire, sinon nom)
+function trouverIngredientImport(catKey,it){
+  const liste=state.matieres[catKey]||[];
+  let ing=null;
+  if(it.code)ing=liste.find(x=>x.code&&x.code.toUpperCase()===(''+it.code).toUpperCase());
+  if(!ing&&it.nom)ing=liste.find(x=>x.nom&&x.nom.toLowerCase()===(''+it.nom).toLowerCase());
+  return ing;
+}
+// Inventaire : lots existants des ingrédients inventoriés qui ne figurent pas dans le comptage
+function lotsARemettreAZero(catKey,items){
+  const comptes=new Map();
+  items.forEach(it=>{
+    const ing=trouverIngredientImport(catKey,it);
+    if(!ing)return;
+    if(!comptes.has(ing.id))comptes.set(ing.id,{ing,lots:new Set()});
+    comptes.get(ing.id).lots.add(it.lot||'');
+  });
+  const res=[];
+  comptes.forEach(({ing,lots})=>{
+    (ing.lots||[]).forEach(l=>{
+      if(!lots.has(l.lot||'')&&(parseFloat(l.stock)||0)!==0)res.push({nom:ing.nom,ing,lot:l});
+    });
+  });
+  return res;
 }
 function confirmImport(){
   if(!importParsed)return;
@@ -2750,9 +2781,11 @@ function confirmImport(){
     alert(`✅ ${ajout} recette(s) importée(s) !`);
     return;
   }
-  const {catKey,items}=importParsed;
+  const {catKey,items,modeInv}=importParsed;
   if(!state.matieres[catKey])state.matieres[catKey]=[];
-  let ajoutLots=0, majLots=0, nouvIngr=0;
+  let ajoutLots=0, majLots=0, nouvIngr=0, remisAZero=0;
+  // Inventaire : calculé AVANT création des nouveaux lots
+  const zeros=modeInv?lotsARemettreAZero(catKey,items):[];
   items.forEach(it=>{
     if(!it.nom&&!it.code)return;
     // 1) Trouver l'ingrédient existant (par code en priorité, sinon par nom)
@@ -2771,10 +2804,16 @@ function confirmImport(){
     const numLot=it.lot||'';
     let lot=numLot?ing.lots.find(l=>l.lot===numLot):null;
     if(lot){
-      // lot existant → on ajoute la quantité reçue
-      if(it.stock)lot.stock=parseFloat((( lot.stock||0)+parseFloat(it.stock)).toFixed(3));
+      if(modeInv){
+        // inventaire → la quantité pesée remplace le stock (0 compris)
+        if(it.stock!=null&&it.stock!=='')lot.stock=parseFloat(parseFloat(it.stock).toFixed(3));
+      }else{
+        // livraison → on ajoute la quantité reçue
+        if(it.stock)lot.stock=parseFloat((( lot.stock||0)+parseFloat(it.stock)).toFixed(3));
+      }
       if(it.prix!=null)lot.prix=parseFloat(it.prix);
-      if(it.analyse)lot.analyse=it.analyse;
+      // en inventaire on complète l'analyse sans effacer les valeurs existantes
+      if(it.analyse)lot.analyse=modeInv?{...(lot.analyse||{}),...it.analyse}:it.analyse;
       majLots++;
     }else{
       lot={id:'lot'+(state.nextId++),lot:numLot,stock:parseFloat(it.stock)||0,prix:it.prix!=null?parseFloat(it.prix):null,analyse:it.analyse||null,date:it.date||todayStr(),aVerifier:it.aVerifier||false};
@@ -2782,8 +2821,10 @@ function confirmImport(){
       ajoutLots++;
     }
   });
+  zeros.forEach(z=>{z.lot.stock=0;remisAZero++;});
   save();closeModal('modal-import');renderMatieres();
   let msg=`✅ ${ajoutLots} lot(s) ajouté(s)`;
+  if(remisAZero)msg+=`, ${remisAZero} lot(s) remis à 0`;
   if(majLots)msg+=`, ${majLots} lot(s) complété(s)`;
   if(nouvIngr)msg+=`, ${nouvIngr} nouvel(s) ingrédient(s)`;
   alert(msg+' !');
