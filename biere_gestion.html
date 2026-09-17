@@ -1228,20 +1228,36 @@ function deleteCommande(id){
 function texteCommande(c){
   const bieres=(c.bieres||[{biere:c.biere,nb:c.nbFuts}]);
   const tirs=cmdTireuses(c);
-  let txt=`🍺 Commande — Brasserie Méouge\n`;
-  txt+=`\nClient : ${c.client}\n`;
-  txt+=`Du ${fmtDateLong(c.dateDebut)}`;
+  let txt=`Cher client,\n\nVotre commande HORN Beer :\n`;
+  txt+=`\nDu ${fmtDateLong(c.dateDebut)}`;
   txt+=c.dateFin?` au ${fmtDateLong(c.dateFin)}\n`:` (retour ouvert)\n`;
   txt+=`\nBières :\n`;
-  bieres.forEach(b=>{txt+=`  • ${biereTag(b)}\n`;});
+  bieres.forEach(b=>{txt+=`  • ${biereTexteCommande(b)}\n`;});
   if(tirs.length){
     txt+=`\nTireuse(s) :\n`;
-    tirs.forEach(t=>{txt+=`  • ${tirTag(t)}\n`;});
+    tirs.forEach(t=>{txt+=`  • ${tirTexteCommande(t)}\n`;});
   }
   txt+=`\n${c.livraison==='livraison'?'🚚 Livraison':'🏪 Retrait sur place'}\n`;
   if(c.notes)txt+=`\n📝 ${c.notes}\n`;
-  txt+=`\n— HORN Beer, Brasserie des Gorges de la Méouge`;
+  txt+=`\nLa Brasserie des Gorges de la Méouge vous remercie de votre commande.`;
   return txt;
+}
+// Bière pour le texte client : "2 fûts de 30L de La N"
+function biereTexteCommande(b){
+  const futs=b.nb>1?'fûts':'fût';
+  return b.format?`${b.nb} ${futs} de ${b.format} de La ${b.biere}`:`${b.nb} ${futs} de La ${b.biere}`;
+}
+// Tireuse pour le texte client : type simple sans référence
+function tirTexteCommande(t){
+  let type=t.type;
+  // Retrouver le type via la tireuse précise si besoin
+  if(t.tirId){const tir=state.tireuses.find(x=>x.id===t.tirId);if(tir)type=tir.type;}
+  else if(t.type==='inox'&&t.inoxId)type='inox';
+  const nb=t.nb||1;
+  if(type==='inox')return nb>1?`${nb} Tireuses inox`:`Tireuse inox`;
+  if(type==='10L')return nb>1?`${nb} Tireuses 10L`:`Tireuse 10L`;
+  if(type==='3L')return nb>1?`${nb} Tireuses 3L`:`Tireuse 3L`;
+  return `Tireuse ${type||''}`.trim();
 }
 // Format date longue "15 septembre 2026"
 function fmtDateLong(s){
@@ -1320,8 +1336,8 @@ function pdfCommande(){
   <div class="info"><div class="k">Période</div><div class="v">Du ${fmtDateLong(c.dateDebut)}${c.dateFin?' au '+fmtDateLong(c.dateFin):' (retour ouvert)'}</div></div>
   <div class="info"><div class="k">Mode</div><div class="v">${c.livraison==='livraison'?'🚚 Livraison':'🏪 Retrait sur place'}</div></div>
   <div class="section-title">🍺 Bières commandées</div>
-  <ul>${bieres.map(b=>`<li>${biereTag(b)}</li>`).join('')}</ul>
-  ${tirs.length?`<div class="section-title">🚰 Tireuse(s)</div><ul>${tirs.map(t=>`<li>${tirTag(t)}</li>`).join('')}</ul>`:''}
+  <ul>${bieres.map(b=>`<li>${biereTexteCommande(b)}</li>`).join('')}</ul>
+  ${tirs.length?`<div class="section-title">🚰 Tireuse(s)</div><ul>${tirs.map(t=>`<li>${tirTexteCommande(t)}</li>`).join('')}</ul>`:''}
   ${c.notes?`<div class="section-title">📝 Notes</div><p>${c.notes}</p>`:''}
   <div class="footer">Brasserie des Gorges de la Méouge — HORN Beer · 05300 Val Buëch-Méouge</div>
   </body></html>`;
