@@ -132,7 +132,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
   <div class="tab" onclick="showTab('fermenteurs')">🧫 Fermenteurs</div>
   <div class="tab" onclick="showTab('futs')">🛢️ Fûts</div>
   <div class="tab" onclick="showTab('brassage')">🧪 Brassage</div>
-  <div class="tab" onclick="showTab('tarifs')">💶 Tarifs</div>
+  <div class="tab" onclick="showTab('tarifs')">🛒 Appro</div>
   <div class="tab" onclick="showTab('config')">⚙️ Config</div>
 </div>
 </div>
@@ -277,13 +277,19 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 
 <!-- TARIFS FOURNISSEURS -->
 <div class="content" id="tab-tarifs">
-  <div class="section-title">💶 Tarifs fournisseurs</div>
+  <div class="section-title">🛒 Appro & stock</div>
   <div class="card" style="padding:12px">
-    <input type="search" class="form-input" id="tarif-q" placeholder="🔍 Rechercher un produit, une réf..." oninput="tarifFiltre.q=this.value;renderTarifsListe()">
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button class="btn btn-sm" id="tarif-vue-cat" style="flex:1;margin:0" onclick="setTarifVue('categorie')">🏷️ Par catégorie</button>
+      <button class="btn btn-sm" id="tarif-vue-four" style="flex:1;margin:0" onclick="setTarifVue('fournisseur')">🏭 Par fournisseur</button>
+    </div>
+    <input type="search" class="form-input" id="tarif-q" placeholder="🔍 Rechercher une matière, une réf..." oninput="tarifFiltre.q=this.value;renderTarifsListe()">
     <div class="form-row" style="margin-top:8px;display:flex;gap:8px">
       <select class="form-select" id="tarif-f" onchange="tarifFiltre.f=this.value;renderTarifsListe()"></select>
       <select class="form-select" id="tarif-c" onchange="tarifFiltre.c=this.value;renderTarifsListe()"></select>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--text-muted)">
+      <input type="checkbox" id="tarif-reco-only" onchange="tarifFiltre.recoOnly=this.checked;renderTarifsListe()" style="width:auto"> 🛒 Afficher seulement « à recommander »</label>
     <div id="tarif-info" style="font-size:11px;color:var(--text-muted);margin-top:8px"></div>
   </div>
   <div id="tarifs-content"></div>
@@ -1097,7 +1103,7 @@ function stockTotal(type){return Object.values(state.stock[type]||{}).reduce((a,
 // ================================================================
 // TABS
 // ================================================================
-const TAB_MAP={dashboard:'Bord',commandes:'Commandes',archives:'Archives',planning:'Planning',timeline:'Timeline',clients:'Clients',tireuses:'Tireuses',fermenteurs:'Fermenteurs',futs:'Fûts',brassage:'Brassage',tarifs:'Tarifs',config:'Config'};
+const TAB_MAP={dashboard:'Bord',commandes:'Commandes',archives:'Archives',planning:'Planning',timeline:'Timeline',clients:'Clients',tireuses:'Tireuses',fermenteurs:'Fermenteurs',futs:'Fûts',brassage:'Brassage',tarifs:'Appro',config:'Config'};
 function showTab(name){
   document.querySelectorAll('.content').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
@@ -4037,11 +4043,16 @@ autoSyncOnStart().then(()=>{
 // ================================================================
 const TARIFS={"version": "2026-09-27", "fournisseurs": [{"id": "antargaz", "nom": "Antargaz", "codeClient": "70520205", "paiement": "Prélèvement"}, {"id": "airliquide", "nom": "Air Liquide France Industrie", "codeClient": "0013719749", "paiement": "Prélèvement SEPA 30 j"}, {"id": "temaco", "nom": "Temaco", "codeClient": "C030166", "paiement": "Virement 30 j net"}, {"id": "sogebul", "nom": "Sogebul Poligny", "codeClient": "C0004197", "paiement": "Virement comptant"}], "produits": [{"fournisseur": "antargaz", "ref": "935", "designation": "Propane 35 kg", "categorie": "gaz", "conditionnement": "bouteille 35 kg", "unitePrix": "bouteille", "prixBrutHT": 120.63, "remise": 43.73, "prixUnitaireHT": 76.9, "prixConditionnementHT": 76.9, "tva": 20, "dateTarif": "2026-06-30", "facture": "5364211"}, {"fournisseur": "antargaz", "ref": "TICPE", "designation": "TICPE autres usages (taxe propane)", "categorie": "taxe", "conditionnement": "par bouteille livrée", "unitePrix": "bouteille", "prixUnitaireHT": 2.67, "prixConditionnementHT": 2.67, "tva": 20, "dateTarif": "2026-06-30", "facture": "5364211"}, {"fournisseur": "antargaz", "ref": "MAINT", "designation": "Forfait maintenance bouteilles", "categorie": "service", "conditionnement": "forfait par livraison", "unitePrix": "forfait", "prixUnitaireHT": 8.95, "prixConditionnementHT": 8.95, "tva": 20, "dateTarif": "2026-06-30", "facture": "5364211"}, {"fournisseur": "airliquide", "ref": "I5110L50R0A001", "designation": "ALIGAL 2 (CO2) bouteille 50 L", "categorie": "gaz", "conditionnement": "bouteille 50 L", "unitePrix": "bouteille", "prixUnitaireHT": 81.58, "prixConditionnementHT": 81.58, "tva": 20, "dateTarif": "2026-07-31", "facture": "5801583206"}, {"fournisseur": "airliquide", "ref": "I5110M14R0A001", "designation": "ALIGAL 2 (CO2) bouteille 14 L", "categorie": "gaz", "conditionnement": "bouteille 14 L", "unitePrix": "bouteille", "prixUnitaireHT": 36.06, "prixConditionnementHT": 36.06, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447", "historique": [{"date": "2026-05-31", "prix": 34.96}]}, {"fournisseur": "airliquide", "ref": "RR0A106", "designation": "Location bouteille gamme CLASSIC", "categorie": "location", "conditionnement": "par bouteille / mois", "unitePrix": "bouteille", "prixBrutHT": 16.67, "remisePct": 53.4, "prixUnitaireHT": 7.77, "prixConditionnementHT": 7.77, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447", "historique": [{"date": "2025-12-31", "prix": 7.4}]}, {"fournisseur": "airliquide", "ref": "S1439", "designation": "PRE fixe bouteille Réglementations-Environnement", "categorie": "service", "conditionnement": "par livraison", "unitePrix": "pièce", "prixBrutHT": 21.97, "remisePct": 45.6, "prixUnitaireHT": 11.95, "prixConditionnementHT": 11.95, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447", "historique": [{"date": "2025-10-31", "prix": 11.38}]}, {"fournisseur": "airliquide", "ref": "RI0A106", "designation": "Immobilisation bouteille gamme CLASSIC", "categorie": "service", "conditionnement": "par bouteille", "unitePrix": "bouteille", "prixBrutHT": 16.1, "remisePct": 100, "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-04-30", "facture": "5801388054"}, {"fournisseur": "airliquide", "ref": "S1553", "designation": "Service accès distributeur", "categorie": "service", "conditionnement": "pièce", "unitePrix": "pièce", "prixBrutHT": 22.18, "remisePct": 100, "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447"}, {"fournisseur": "airliquide", "ref": "S5104", "designation": "Servitrax gestion des emballages", "categorie": "service", "conditionnement": "pièce", "unitePrix": "pièce", "prixBrutHT": 0.62, "remisePct": 100, "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447"}, {"fournisseur": "temaco", "ref": "027119", "designation": "Bouteille bière 33 cl LN couronne 26 ébène NM", "categorie": "emballage", "conditionnement": "palette 2 888 u", "unitePrix": "bouteille", "prixMilleHT": 142.32, "prixUnitaireHT": 0.14232, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "027200", "designation": "Bouteille bière 75 cl bras couronne 26 ébène", "categorie": "emballage", "conditionnement": "palette 1 218 u", "unitePrix": "bouteille", "prixMilleHT": 378.81, "prixUnitaireHT": 0.37881, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "027383B", "designation": "Bouteille limonade 25 cl B méca", "categorie": "emballage", "conditionnement": "pack de 12", "unitePrix": "bouteille", "prixMilleHT": 558.75, "prixUnitaireHT": 0.55875, "tva": 20, "dateTarif": "2026-05-13", "facture": "FCL2605TCOF00427"}, {"fournisseur": "temaco", "ref": "111419_2", "designation": "Carton bière 33 cl x12 poignées (prédécoupé, 248x186x230)", "categorie": "emballage", "conditionnement": "paquet de 25", "unitePrix": "carton", "prixMilleHT": 389.56, "prixUnitaireHT": 0.38956, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "111420_2", "designation": "Carton bière 75 cl x6 poignées (prédécoupé, 244x163x293)", "categorie": "emballage", "conditionnement": "paquet de 25", "unitePrix": "carton", "prixMilleHT": 359.76, "prixUnitaireHT": 0.35976, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "131003", "designation": "Palette 100x120 vendue (consigne)", "categorie": "consigne", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 14.5, "prixConditionnementHT": 14.5, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "131000", "designation": "Palette Europe 80x120", "categorie": "consigne", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 14.5, "prixConditionnementHT": 14.5, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "136003", "designation": "Plaque intercalaire plastique (consigne)", "categorie": "consigne", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 2.94, "prixConditionnementHT": 2.94, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "131006", "designation": "Palette 100x120 reprise (avoir)", "categorie": "reprise", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": -9.0, "prixConditionnementHT": -9.0, "tva": 20, "dateTarif": "2026-06-26", "facture": "ACL2606TCOF00205"}, {"fournisseur": "temaco", "ref": "136005", "designation": "Plaque plastique reprise (avoir)", "categorie": "reprise", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": -2.74, "prixConditionnementHT": -2.74, "tva": 20, "dateTarif": "2026-06-26", "facture": "ACL2606TCOF00205"}, {"fournisseur": "temaco", "ref": "PORT", "designation": "Frais de port (petite commande)", "categorie": "transport", "conditionnement": "forfait", "unitePrix": "forfait", "prixUnitaireHT": 71.0, "prixConditionnementHT": 71.0, "tva": 20, "dateTarif": "2026-05-13", "facture": "FCL2605TCOF00427", "note": "Pas de port facturé sur la commande palette du 17/07/2026"}, {"fournisseur": "sogebul", "ref": "LEVURE_NEWE_500G", "designation": "Levure Fermoale New-E", "categorie": "matiere_premiere", "conditionnement": "sachet 500 g", "unitePrix": "kg", "prixUnitaireHT": 154.0, "prixConditionnementHT": 77.0, "tva": 5.5, "dateTarif": "2026-07-29", "facture": "240486", "historique": [{"date": "2025-11-04", "prix": 160.0}]}, {"fournisseur": "sogebul", "ref": "LEVURE_ROCK_500G", "designation": "Levure Rock Ale fraîcheur", "categorie": "matiere_premiere", "conditionnement": "sachet 500 g", "unitePrix": "kg", "prixUnitaireHT": 101.5, "prixConditionnementHT": 50.75, "tva": 5.5, "dateTarif": "2026-07-29", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "LEVURE_BELABBEY_500G", "designation": "Levure Fermoale Bel-Abbey", "categorie": "matiere_premiere", "conditionnement": "sachet 500 g", "unitePrix": "kg", "prixUnitaireHT": 111.9, "prixConditionnementHT": 55.95, "tva": 5.5, "dateTarif": "2026-07-02", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "SUCREBIO_BLOND_25KG", "designation": "Sucre de canne bio blond", "categorie": "matiere_premiere", "conditionnement": "sac 25 kg", "unitePrix": "kg", "prixUnitaireHT": 1.99, "prixConditionnementHT": 49.75, "tva": 5.5, "dateTarif": "2026-07-29", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "ALGUEBIO_CHONCRIS_5KG", "designation": "Algue bio Chondrus crispus flocon 2-4 mm", "categorie": "matiere_premiere", "conditionnement": "sac 5 kg", "unitePrix": "kg", "prixUnitaireHT": 17.45, "prixConditionnementHT": 87.25, "tva": 5.5, "dateTarif": "2025-07-28", "facture": "213438"}, {"fournisseur": "sogebul", "ref": "CALFLUID_ROUGE_JER20KG", "designation": "Fluide caloporteur concentré rouge (glycol)", "categorie": "technique", "conditionnement": "jerrican 20 kg", "unitePrix": "kg", "prixUnitaireHT": 5.2, "prixConditionnementHT": 104.0, "tva": 20, "dateTarif": "2026-07-02", "facture": "240486", "historique": [{"date": "2025-07-03", "prix": 4.16}]}, {"fournisseur": "sogebul", "ref": "ETHAPLUS_BID_5L", "designation": "Ethaplus", "categorie": "nettoyage", "conditionnement": "bidon 5 L", "unitePrix": "L", "prixUnitaireHT": 5.28, "prixConditionnementHT": 26.4, "tva": 20, "dateTarif": "2026-07-29", "facture": "240486", "historique": [{"date": "2025-11-04", "prix": 5.18}], "note": "Surcharge fabricant matières premières de 1,31 € HT sur la facture 240486 (3 bidons)"}, {"fournisseur": "sogebul", "ref": "XACIDLY_JER_20KG", "designation": "X-Acid LY", "categorie": "nettoyage", "conditionnement": "jerrican 20 kg", "unitePrix": "kg", "prixUnitaireHT": 2.7, "prixConditionnementHT": 54.0, "tva": 20, "dateTarif": "2026-07-29", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "ADDINGOX_BID_10KG", "designation": "Adding OX", "categorie": "nettoyage", "conditionnement": "bidon 10 kg", "unitePrix": "kg", "prixUnitaireHT": 4.3, "prixConditionnementHT": 43.0, "tva": 20, "dateTarif": "2026-07-29", "facture": "240486", "historique": [{"date": "2025-11-04", "prix": 4.8}]}, {"fournisseur": "sogebul", "ref": "REMOVILLIQ_JER_25KG", "designation": "Removil Liquid", "categorie": "nettoyage", "conditionnement": "jerrican 25 kg", "unitePrix": "kg", "prixUnitaireHT": 2.8, "prixConditionnementHT": 70.0, "tva": 20, "dateTarif": "2026-07-02", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "BRILLEINOX", "designation": "Suma Brille Inox D7.2", "categorie": "nettoyage", "conditionnement": "flacon 750 ml", "unitePrix": "flacon", "prixUnitaireHT": 17.99, "prixConditionnementHT": 17.99, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "DUOTOUCH_1L", "designation": "Duotouch savon", "categorie": "hygiene", "conditionnement": "flacon 1 L", "unitePrix": "flacon", "prixUnitaireHT": 6.28, "prixConditionnementHT": 6.28, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "DISTRISAVON1", "designation": "Distributeur savon airless inox", "categorie": "hygiene", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 9.9, "prixConditionnementHT": 9.9, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "BOUCHONOREIL_CORD/LAV_PAI", "designation": "Bouchons d'oreille réutilisables avec cordelette", "categorie": "epi", "conditionnement": "paire (boîte de 50)", "unitePrix": "paire", "prixUnitaireHT": 2.59, "prixConditionnementHT": 2.59, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "ULTRANEO_450NOIR_M", "designation": "Gants néoprène/latex 450 noir T8 (M) 41 cm", "categorie": "epi", "conditionnement": "paire", "unitePrix": "paire", "prixUnitaireHT": 8.68, "prixConditionnementHT": 8.68, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "FILMALIM_30CM", "designation": "Film alimentaire 7 µ, 30 cm x 300 m", "categorie": "consommable", "conditionnement": "rouleau", "unitePrix": "rouleau", "prixUnitaireHT": 11.29, "prixConditionnementHT": 11.29, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "EPROUVETTE_250ML", "designation": "Éprouvette graduée plastique 250 ml", "categorie": "laboratoire", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 16.4, "prixConditionnementHT": 16.4, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "REPRISE_JER", "designation": "Reprise emballage vide jerrican 20 L", "categorie": "reprise", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-07-02", "facture": "240486"}]};
 const TARIF_CATS={matiere_premiere:'🌾 Matières premières',emballage:'🍾 Emballages',gaz:'🔥 Gaz',nettoyage:'🧽 Nettoyage',technique:'❄️ Technique',hygiene:'🧼 Hygiène',epi:'🦺 EPI',consommable:'📦 Consommables',laboratoire:'🔬 Labo',consigne:'🔁 Consignes',reprise:'↩️ Reprises / avoirs',location:'📅 Location',service:'🛠️ Services',transport:'🚚 Transport',taxe:'🏛️ Taxes'};
-let tarifFiltre={q:'',f:'',c:''};
+let tarifFiltre={q:'',f:'',c:'',recoOnly:false};
+let tarifVue='categorie';
+let voirMasques=false;
 function fmtEur(v){const d=Math.abs(v)>0&&Math.abs(v)<1?4:2;return v.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:d})+' €';}
 function fmtDateFr(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${y}`;}
+function escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 
-// ===== LOGISTIQUE : stock + à recommander (clé "fournisseur|ref") =====
+// ===== APPRO : stock + à recommander =====
+// Produits fournisseurs → state.stockLog["fournisseur|ref"] = {stock,recommander}
+// Matières de brassage → lues dans state.matieres (lien recettes conservé), drapeau m.recommander
 function prodKey(p){return p.fournisseur+'|'+p.ref;}
 function getStockLog(p){const k=prodKey(p);if(!state.stockLog[k])state.stockLog[k]={stock:0,recommander:false};return state.stockLog[k];}
 function ajusterStock(fournisseur,ref,delta){
@@ -4059,13 +4070,51 @@ function toggleRecommander(fournisseur,ref){
   state.stockLog[k].recommander=!state.stockLog[k].recommander;
   save();renderTarifsListe();
 }
+// Masquer / réafficher un produit fournisseur de l'Appro (réversible, ne supprime rien)
+function toggleMasque(fournisseur,ref){
+  const k=fournisseur+'|'+ref;if(!state.stockLog[k])state.stockLog[k]={stock:0,recommander:false};
+  state.stockLog[k].masque=!state.stockLog[k].masque;
+  if(state.stockLog[k].masque)state.stockLog[k].recommander=false; // un masqué sort de la liste à recommander
+  save();renderTarifsListe();
+}
+// Matière de brassage : bascule le drapeau recommander sans toucher aux lots/recettes
+function matFind(cat,ident){return (state.matieres[cat]||[]).find(x=>(x.code&&x.code===ident)||x.nom===ident);}
+function toggleRecommanderMat(cat,ident){
+  const m=matFind(cat,ident);if(!m)return;
+  m.recommander=!m.recommander;save();renderTarifsListe();
+}
+// Libellés de catégories unifiés (brassage + fournisseurs)
+const APPRO_CAT_LABELS=(()=>{const o={};MAT_CATS.forEach(c=>o[c.k]=c.icon+' '+c.l);Object.assign(o,TARIF_CATS);return o;})();
+// Liste unifiée normalisée des articles d'appro
+function getApproItems(){
+  const items=[];
+  MAT_CATS.forEach(c=>{
+    (state.matieres[c.k]||[]).forEach(m=>{
+      if(m.archive)return;
+      items.push({src:'mat',cat:c.k,fournisseur:'brasserie',fournisseurNom:'🍺 Brasserie — matières premières',
+        designation:m.nom||'(sans nom)',ref:m.code||'',conditionnement:'',unite:m.unite||'',
+        prixHT:prixIngredient(m),tva:null,stock:stockIngredient(m),stockEditable:false,
+        reco:!!m.recommander,raw:{m,cat:c.k}});
+    });
+  });
+  TARIFS.produits.forEach(p=>{
+    const s=getStockLog(p);const f=TARIFS.fournisseurs.find(x=>x.id===p.fournisseur);
+    items.push({src:'tarif',cat:p.categorie,fournisseur:p.fournisseur,fournisseurNom:f?f.nom:p.fournisseur,
+      designation:p.designation,ref:p.ref,conditionnement:p.conditionnement,unite:p.unitePrix,
+      prixHT:p.prixUnitaireHT,tva:p.tva,stock:s.stock,stockEditable:true,
+      reco:!!s.recommander,masque:!!s.masque,raw:p});
+  });
+  return items;
+}
 function copierListeReappro(){
+  const reco=getApproItems().filter(it=>it.reco);
+  const groupes=[{id:'brasserie',nom:'Brasserie — matières premières'}].concat(TARIFS.fournisseurs);
   const lignes=[];
-  TARIFS.fournisseurs.forEach(f=>{
-    const items=TARIFS.produits.filter(p=>p.fournisseur===f.id&&(state.stockLog[prodKey(p)]||{}).recommander);
+  groupes.forEach(g=>{
+    const items=reco.filter(it=>it.fournisseur===g.id);
     if(!items.length)return;
-    lignes.push(`— ${f.nom} (client ${f.codeClient}) —`);
-    items.forEach(p=>{const s=getStockLog(p);lignes.push(`• ${p.designation} (${p.ref}) · ${p.conditionnement} · reste ${s.stock} ${p.unitePrix}`);});
+    lignes.push(`— ${g.nom}${g.codeClient?' (client '+g.codeClient+')':''} —`);
+    items.forEach(it=>{lignes.push(`• ${it.designation}${it.ref?' ('+it.ref+')':''}${it.conditionnement?' · '+it.conditionnement:''} · reste ${it.stock} ${it.unite}`);});
     lignes.push('');
   });
   const txt=lignes.join('\n').trim()||'Aucun article à recommander.';
@@ -4073,87 +4122,139 @@ function copierListeReappro(){
     navigator.clipboard.writeText(txt).then(()=>alert('🛒 Liste copiée !\n\n'+txt),()=>alert(txt));
   }else alert(txt);
 }
+function setTarifVue(v){tarifVue=v;majVueBoutons();renderTarifsListe();}
+function majVueBoutons(){
+  const bc=document.getElementById('tarif-vue-cat'),bf=document.getElementById('tarif-vue-four');
+  if(bc)bc.className='btn btn-sm '+(tarifVue==='categorie'?'btn-primary':'btn-secondary');
+  if(bf)bf.className='btn btn-sm '+(tarifVue==='fournisseur'?'btn-primary':'btn-secondary');
+}
 function renderTarifs(){
   const fs=document.getElementById('tarif-f'),cs=document.getElementById('tarif-c');
   if(!fs.options.length){
-    fs.innerHTML='<option value="">Tous fournisseurs</option>'+TARIFS.fournisseurs.map(f=>`<option value="${f.id}">${f.nom}</option>`).join('');
-    const cats=[...new Set(TARIFS.produits.map(p=>p.categorie))];
-    cs.innerHTML='<option value="">Toutes catégories</option>'+cats.map(c=>`<option value="${c}">${TARIF_CATS[c]||c}</option>`).join('');
+    fs.innerHTML='<option value="">Tous fournisseurs</option><option value="brasserie">🍺 Brasserie (brassage)</option>'
+      +TARIFS.fournisseurs.map(f=>`<option value="${f.id}">${f.nom}</option>`).join('');
+    const cats=[...new Set(getApproItems().map(it=>it.cat))];
+    cs.innerHTML='<option value="">Toutes catégories</option>'+cats.map(c=>`<option value="${c}">${APPRO_CAT_LABELS[c]||c}</option>`).join('');
   }
+  majVueBoutons();
   renderTarifsListe();
+}
+// Rendu d'une ligne d'article (matière de brassage OU produit fournisseur)
+function approRowHtml(it){
+  const reco=it.reco;
+  if(it.src==='mat'){
+    const ident=escJs(it.ref||it.designation);
+    const prix=it.prixHT!=null?`${fmtEur(it.prixHT)}<span style="font-size:10px;color:var(--text-muted);font-weight:400"> HT/${it.unite}</span>`:'<span style="font-size:11px;color:var(--text-muted)">prix —</span>';
+    return `<div class="row" style="flex-direction:column;align-items:stretch;gap:0;padding:9px 0">
+     <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div class="row-name" style="font-size:13px">${it.designation} <span class="badge badge-ok" style="font-size:9px;padding:1px 6px">brassage</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${it.ref?'<b style="color:var(--amber-light)">'+it.ref+'</b> · ':''}relié aux recettes</div>
+      </div>
+      <div style="text-align:right;white-space:nowrap"><div style="font-size:14px;font-weight:700;color:var(--amber-light)">${prix}</div></div>
+     </div>
+     <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+       <span style="font-size:11px;color:var(--text-muted)">📦 Stock : <b style="color:var(--foam)">${it.stock} ${it.unite}</b></span>
+       <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:10px" onclick="showTab('brassage');setBrassageSub('matieres')" title="Ajuster les lots">✏️ Lots</button>
+       <button class="btn ${reco?'btn-primary':'btn-secondary'} btn-sm" style="margin-left:auto;padding:4px 10px;font-size:11px" onclick="toggleRecommanderMat('${it.cat}','${ident}')">${reco?'🛒 Dans la liste ✓':'🛒 À recommander'}</button>
+     </div>
+    </div>`;
+  }
+  // Produit fournisseur (tarif)
+  const p=it.raw;
+  const ttc=p.prixUnitaireHT*(1+p.tva/100);
+  let tendance='';
+  if(p.historique&&p.historique.length){
+    const anc=p.historique[p.historique.length-1].prix, diff=(p.prixUnitaireHT-anc)/anc*100;
+    const up=diff>0;
+    tendance=`<span title="Avant : ${fmtEur(anc)} (${fmtDateFr(p.historique[p.historique.length-1].date)})" style="font-size:11px;font-weight:700;color:${up?'var(--red-light)':'var(--green-light)'}"> ${up?'▲':'▼'} ${up?'+':''}${diff.toFixed(1).replace('.',',')} %</span>`;
+  }
+  const cond=(p.prixConditionnementHT!==undefined&&p.prixConditionnementHT!==p.prixUnitaireHT)?` · ${fmtEur(p.prixConditionnementHT)} le ${p.conditionnement.split(' ')[0]}`:'';
+  const mille=p.prixMilleHT?` · ${fmtEur(p.prixMilleHT)} les 1000`:'';
+  const remise=p.remisePct?` · remise ${String(p.remisePct).replace('.',',')} % (brut ${fmtEur(p.prixBrutHT)})`:(p.remise?` · remise ${fmtEur(p.remise)} (brut ${fmtEur(p.prixBrutHT)})`:'');
+  const tvaBadge=`<span class="badge ${p.tva<20?'badge-ok':'badge-warn'}" style="font-size:10px;padding:2px 7px">TVA ${String(p.tva).replace('.',',')} %</span>`;
+  const refEsc=escJs(p.ref);
+  const barreStock=`<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--text-muted)">📦 Stock :</span>
+    <button class="icon-btn" style="width:26px;height:26px;padding:0" onclick="ajusterStock('${p.fournisseur}','${refEsc}',-1)">−</button>
+    <input type="number" step="any" value="${it.stock}" onchange="setStock('${p.fournisseur}','${refEsc}',this.value)" style="width:56px;text-align:center;font-size:13px;padding:4px;background:var(--dark);color:var(--foam);border:1px solid var(--border);border-radius:6px">
+    <button class="icon-btn" style="width:26px;height:26px;padding:0" onclick="ajusterStock('${p.fournisseur}','${refEsc}',1)">＋</button>
+    <span style="font-size:10px;color:var(--text-muted)">${p.unitePrix}</span>
+    <button class="btn ${reco?'btn-primary':'btn-secondary'} btn-sm" style="margin-left:auto;padding:4px 10px;font-size:11px" onclick="toggleRecommander('${p.fournisseur}','${refEsc}')">${reco?'🛒 Dans la liste ✓':'🛒 À recommander'}</button>
+    <button class="icon-btn" style="width:26px;height:26px;padding:0;color:${it.masque?'var(--green-light)':'var(--red-light)'}" title="${it.masque?'Réafficher dans l’Appro':'Masquer de l’Appro (non consommable)'}" onclick="toggleMasque('${p.fournisseur}','${refEsc}')">${it.masque?'♻️':'🗑'}</button>
+  </div>`;
+  return `<div class="row" style="flex-direction:column;align-items:stretch;gap:0;padding:9px 0">
+   <div style="display:flex;align-items:flex-start;gap:10px">
+    <div style="flex:1;min-width:0">
+      <div class="row-name" style="font-size:13px">${p.designation}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.ref} · ${p.conditionnement}${cond}${mille}${remise}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Facture ${p.facture} du ${fmtDateFr(p.dateTarif)}${p.note?' · ⚠️ '+p.note:''}</div>
+    </div>
+    <div style="text-align:right;white-space:nowrap">
+      <div style="font-size:14px;font-weight:700;color:var(--amber-light)">${fmtEur(p.prixUnitaireHT)}<span style="font-size:10px;color:var(--text-muted);font-weight:400"> HT/${p.unitePrix}</span></div>
+      <div style="font-size:11px;color:var(--text-muted)">${fmtEur(ttc)} TTC${tendance}</div>
+      <div style="margin-top:3px">${tvaBadge}</div>
+    </div>
+   </div>
+   ${barreStock}
+  </div>`;
 }
 function renderTarifsListe(){
   const q=tarifFiltre.q.trim().toLowerCase();
-  const liste=TARIFS.produits.filter(p=>(!tarifFiltre.f||p.fournisseur===tarifFiltre.f)&&(!tarifFiltre.c||p.categorie===tarifFiltre.c)
-    &&(!q||(p.designation+' '+p.ref+' '+p.conditionnement).toLowerCase().includes(q)));
-  document.getElementById('tarif-info').textContent=`${liste.length} produit(s) · prix HT · tarifs relevés sur factures (MAJ ${fmtDateFr(TARIFS.version)})`;
+  const tous=getApproItems();
+  const nbMasques=tous.filter(it=>it.masque).length;
+  const liste=tous.filter(it=>(voirMasques?it.masque:!it.masque)
+    &&(!tarifFiltre.f||it.fournisseur===tarifFiltre.f)&&(!tarifFiltre.c||it.cat===tarifFiltre.c)
+    &&(!tarifFiltre.recoOnly||it.reco)
+    &&(!q||(it.designation+' '+it.ref+' '+it.conditionnement).toLowerCase().includes(q)));
+  document.getElementById('tarif-info').innerHTML=`${liste.length} article(s) · matières brassage + produits fournisseurs · prix HT (MAJ tarifs ${fmtDateFr(TARIFS.version)})`
+    +(nbMasques?` · <a href="#" onclick="voirMasques=!voirMasques;renderTarifsListe();return false" style="color:var(--amber-light)">${voirMasques?'← revenir à l’Appro':'🗑 voir les '+nbMasques+' masqué(s)'}</a>`:'');
   let html='';
-  // Bloc "À recommander" (tous fournisseurs, non filtré)
-  const aRecommander=TARIFS.produits.filter(p=>(state.stockLog[prodKey(p)]||{}).recommander);
-  if(aRecommander.length){
+  if(voirMasques){
+    html+='<div class="card" style="background:var(--dark2);font-size:12px;color:var(--text-muted)">🗑 Articles masqués de l\'Appro (non consommables). Clique ♻️ pour en réafficher un.</div>';
+  }
+  // Bloc "À recommander" (global, non filtré, hors masqués)
+  const reco=tous.filter(it=>it.reco&&!it.masque);
+  if(reco.length&&!voirMasques){
     html+=`<div class="card" style="border:1px solid var(--amber);background:var(--dark2)">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-        <span>🛒 À recommander (${aRecommander.length})</span>
+        <span>🛒 À recommander (${reco.length})</span>
         <button class="btn btn-secondary btn-sm" onclick="copierListeReappro()">📋 Copier la liste</button>
       </div>`;
-    TARIFS.fournisseurs.forEach(f=>{
-      const items=aRecommander.filter(p=>p.fournisseur===f.id);
-      if(!items.length)return;
-      html+=`<div style="font-size:12px;font-weight:700;color:var(--amber-light);margin:8px 0 4px">${f.nom}</div>`;
-      html+=items.map(p=>{const s=getStockLog(p);return `<div class="row" style="padding:5px 0;font-size:12px">
-        <div style="flex:1;min-width:0"><div class="row-name" style="font-size:12px">${p.designation}</div>
-        <div style="font-size:10px;color:var(--text-muted)">${p.ref} · reste ${s.stock} ${p.unitePrix}</div></div>
-        <button class="icon-btn" title="Retirer de la liste" onclick="toggleRecommander('${p.fournisseur}','${p.ref.replace(/'/g,"\\'")}')">✕</button>
+    const grp=[{id:'brasserie',nom:'🍺 Brasserie — matières premières'}].concat(TARIFS.fournisseurs.map(f=>({id:f.id,nom:f.nom})));
+    grp.forEach(g=>{
+      const items=reco.filter(it=>it.fournisseur===g.id);if(!items.length)return;
+      html+=`<div style="font-size:12px;font-weight:700;color:var(--amber-light);margin:8px 0 4px">${g.nom}</div>`;
+      html+=items.map(it=>{
+        const off=it.src==='mat'?`toggleRecommanderMat('${it.cat}','${escJs(it.ref||it.designation)}')`:`toggleRecommander('${it.fournisseur}','${escJs(it.ref)}')`;
+        return `<div class="row" style="padding:5px 0;font-size:12px">
+        <div style="flex:1;min-width:0"><div class="row-name" style="font-size:12px">${it.designation}</div>
+        <div style="font-size:10px;color:var(--text-muted)">${it.ref?it.ref+' · ':''}reste ${it.stock} ${it.unite}</div></div>
+        <button class="icon-btn" title="Retirer de la liste" onclick="${off}">✕</button>
       </div>`;}).join('');
     });
     html+='</div>';
   }
-  TARIFS.fournisseurs.forEach(f=>{
-    const items=liste.filter(p=>p.fournisseur===f.id);
-    if(!items.length)return;
-    html+=`<div class="card"><div class="card-title">${f.nom} <span style="font-family:Inter,sans-serif;font-size:11px;color:var(--text-muted);letter-spacing:0">· client ${f.codeClient} · ${f.paiement}</span></div>`;
-    html+=items.map(p=>{
-      const ttc=p.prixUnitaireHT*(1+p.tva/100);
-      let tendance='';
-      if(p.historique&&p.historique.length){
-        const anc=p.historique[p.historique.length-1].prix, diff=(p.prixUnitaireHT-anc)/anc*100;
-        const up=diff>0;
-        tendance=`<span title="Avant : ${fmtEur(anc)} (${fmtDateFr(p.historique[p.historique.length-1].date)})" style="font-size:11px;font-weight:700;color:${up?'var(--red-light)':'var(--green-light)'}"> ${up?'▲':'▼'} ${up?'+':''}${diff.toFixed(1).replace('.',',')} %</span>`;
-      }
-      const cond=(p.prixConditionnementHT!==undefined&&p.prixConditionnementHT!==p.prixUnitaireHT)?` · ${fmtEur(p.prixConditionnementHT)} le ${p.conditionnement.split(' ')[0]}`:'';
-      const mille=p.prixMilleHT?` · ${fmtEur(p.prixMilleHT)} les 1000`:'';
-      const remise=p.remisePct?` · remise ${String(p.remisePct).replace('.',',')} % (brut ${fmtEur(p.prixBrutHT)})`:(p.remise?` · remise ${fmtEur(p.remise)} (brut ${fmtEur(p.prixBrutHT)})`:'');
-      const tvaBadge=`<span class="badge ${p.tva<20?'badge-ok':'badge-warn'}" style="font-size:10px;padding:2px 7px">TVA ${String(p.tva).replace('.',',')} %</span>`;
-      const s=getStockLog(p);
-      const reco=s.recommander;
-      const refEsc=p.ref.replace(/'/g,"\\'");
-      const barreStock=`<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--text-muted)">📦 Stock :</span>
-        <button class="icon-btn" style="width:26px;height:26px;padding:0" onclick="ajusterStock('${p.fournisseur}','${refEsc}',-1)">−</button>
-        <input type="number" step="any" value="${s.stock}" onchange="setStock('${p.fournisseur}','${refEsc}',this.value)" style="width:56px;text-align:center;font-size:13px;padding:4px;background:var(--dark);color:var(--foam);border:1px solid var(--border);border-radius:6px">
-        <button class="icon-btn" style="width:26px;height:26px;padding:0" onclick="ajusterStock('${p.fournisseur}','${refEsc}',1)">＋</button>
-        <span style="font-size:10px;color:var(--text-muted)">${p.unitePrix}</span>
-        <button class="btn ${reco?'btn-primary':'btn-secondary'} btn-sm" style="margin-left:auto;padding:4px 10px;font-size:11px" onclick="toggleRecommander('${p.fournisseur}','${refEsc}')">${reco?'🛒 Dans la liste ✓':'🛒 À recommander'}</button>
-      </div>`;
-      return `<div class="row" style="flex-direction:column;align-items:stretch;gap:0;padding:9px 0">
-       <div style="display:flex;align-items:flex-start;gap:10px">
-        <div style="flex:1;min-width:0">
-          <div class="row-name" style="font-size:13px">${p.designation}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.ref} · ${p.conditionnement}${cond}${mille}${remise}</div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Facture ${p.facture} du ${fmtDateFr(p.dateTarif)}${p.note?' · ⚠️ '+p.note:''}</div>
-        </div>
-        <div style="text-align:right;white-space:nowrap">
-          <div style="font-size:14px;font-weight:700;color:var(--amber-light)">${fmtEur(p.prixUnitaireHT)}<span style="font-size:10px;color:var(--text-muted);font-weight:400"> HT/${p.unitePrix}</span></div>
-          <div style="font-size:11px;color:var(--text-muted)">${fmtEur(ttc)} TTC${tendance}</div>
-          <div style="margin-top:3px">${tvaBadge}</div>
-        </div>
-       </div>
-       ${barreStock}
-      </div>`;
-    }).join('');
-    html+='</div>';
-  });
-  document.getElementById('tarifs-content').innerHTML=html||'<div class="card" style="color:var(--text-muted);font-size:13px">Aucun produit ne correspond.</div>';
+  // Groupes principaux selon la vue
+  if(tarifVue==='fournisseur'){
+    const grp=[{id:'brasserie',nom:'🍺 Brasserie — matières premières',sub:'ingrédients reliés aux recettes'}]
+      .concat(TARIFS.fournisseurs.map(f=>({id:f.id,nom:f.nom,sub:`client ${f.codeClient} · ${f.paiement}`})));
+    grp.forEach(g=>{
+      const items=liste.filter(it=>it.fournisseur===g.id);if(!items.length)return;
+      html+=`<div class="card"><div class="card-title">${g.nom} <span style="font-family:Inter,sans-serif;font-size:11px;color:var(--text-muted);letter-spacing:0">· ${g.sub}</span></div>`;
+      html+=items.map(approRowHtml).join('');
+      html+='</div>';
+    });
+  }else{
+    const ordre=MAT_CATS.map(c=>c.k).concat(Object.keys(TARIF_CATS));
+    ordre.forEach(catKey=>{
+      const items=liste.filter(it=>it.cat===catKey);if(!items.length)return;
+      html+=`<div class="card"><div class="card-title">${APPRO_CAT_LABELS[catKey]||catKey}</div>`;
+      html+=items.map(approRowHtml).join('');
+      html+='</div>';
+    });
+  }
+  document.getElementById('tarifs-content').innerHTML=html||'<div class="card" style="color:var(--text-muted);font-size:13px">Aucun article ne correspond.</div>';
 }
 </script>
 </body>
