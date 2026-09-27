@@ -124,6 +124,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 <div class="tabs">
   <div class="tab active" onclick="showTab('dashboard')">📊 Bord</div>
   <div class="tab" onclick="showTab('commandes')">📋 Commandes</div>
+  <div class="tab" onclick="showTab('archives')">📦 Archives</div>
   <div class="tab" onclick="showTab('planning')">📅 Planning</div>
   <div class="tab" onclick="showTab('timeline')">📈 Timeline</div>
   <div class="tab" onclick="showTab('clients')">👥 Clients</div>
@@ -131,6 +132,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
   <div class="tab" onclick="showTab('fermenteurs')">🧫 Fermenteurs</div>
   <div class="tab" onclick="showTab('futs')">🛢️ Fûts</div>
   <div class="tab" onclick="showTab('brassage')">🧪 Brassage</div>
+  <div class="tab" onclick="showTab('tarifs')">💶 Tarifs</div>
   <div class="tab" onclick="showTab('config')">⚙️ Config</div>
 </div>
 </div>
@@ -150,6 +152,14 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 <div class="content" id="tab-commandes">
   <div class="section-title">📋 Commandes</div>
   <div id="commandes-list"></div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- ARCHIVES -->
+<div class="content" id="tab-archives">
+  <div class="section-title">📦 Commandes archivées</div>
+  <input type="text" class="form-input" id="archives-search" placeholder="🔍 Rechercher un client..." style="margin-bottom:12px" oninput="renderArchives()">
+  <div id="archives-list"></div>
   <div class="bottom-space"></div>
 </div>
 
@@ -262,6 +272,21 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
 <div class="content" id="tab-brassage">
   <div class="section-title">🧪 Brassage</div>
   <div id="brassage-content"></div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- TARIFS FOURNISSEURS -->
+<div class="content" id="tab-tarifs">
+  <div class="section-title">💶 Tarifs fournisseurs</div>
+  <div class="card" style="padding:12px">
+    <input type="search" class="form-input" id="tarif-q" placeholder="🔍 Rechercher un produit, une réf..." oninput="tarifFiltre.q=this.value;renderTarifsListe()">
+    <div class="form-row" style="margin-top:8px;display:flex;gap:8px">
+      <select class="form-select" id="tarif-f" onchange="tarifFiltre.f=this.value;renderTarifsListe()"></select>
+      <select class="form-select" id="tarif-c" onchange="tarifFiltre.c=this.value;renderTarifsListe()"></select>
+    </div>
+    <div id="tarif-info" style="font-size:11px;color:var(--text-muted);margin-top:8px"></div>
+  </div>
+  <div id="tarifs-content"></div>
   <div class="bottom-space"></div>
 </div>
 
@@ -588,13 +613,18 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--text);min
       <select class="form-select" id="cmd-client-fixe" onchange="applyClientFixe()">
         <option value="">— Nouveau client / ponctuel —</option>
       </select></div>
+    <div class="form-group"><label class="form-label">Type de commande</label>
+      <select class="form-select" id="cmd-type" onchange="applyCmdType()">
+        <option value="tireuses">🚰 Location tireuses</option>
+        <option value="bouteilles">🍾 Livraison bouteilles / fûts (sans tireuse)</option>
+      </select></div>
     <div class="form-group"><label class="form-label">Client</label><input type="text" class="form-input" id="cmd-client" placeholder="Nom du client"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Date début</label><input type="date" class="form-input" id="cmd-debut"></div>
-      <div class="form-group"><label class="form-label">Date retour (optionnel)</label><input type="date" class="form-input" id="cmd-fin"></div>
+      <div class="form-group" id="cmd-fin-group"><label class="form-label">Date retour (optionnel)</label><input type="date" class="form-input" id="cmd-fin"></div>
     </div>
     <!-- MULTI-TIREUSES -->
-    <div class="form-group">
+    <div class="form-group" id="cmd-tireuses-group">
       <label class="form-label">Tireuses commandées</label>
       <div id="tireuses-lignes"></div>
       <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="addTireuseLigne()">＋ Ajouter une tireuse</button>
@@ -812,6 +842,8 @@ function migrate(){
   });
   if(!state.recettes) state.recettes=[];
   if(!state.brassins) state.brassins=[];
+  // Logistique : stock + "à recommander" par produit tarif, clé "fournisseur|ref"
+  if(!state.stockLog) state.stockLog={};
   upgradeTireusesInox();
   state.bieres.forEach(b=>{
     FORMATS.forEach(t=>{if(!state.stock[t])state.stock[t]={};if(state.stock[t][b]===undefined)state.stock[t][b]=0;});
@@ -1037,6 +1069,7 @@ function tirDispo(type,debut,fin,excludeId=null){
   let used=0;
   state.commandes.forEach(c=>{
     if(c.id===excludeId)return;
+    if(c.archivee||c.retourFait)return; // rendue ou archivée = tireuses libérées
     if(c.dateDebut<=fin&&(c.dateFin||"9999-12-31")>=debut){
       cmdTireuses(c).forEach(t=>{if(t.type===type)used+=t.nb;});
     }
@@ -1050,6 +1083,7 @@ function inoxLibre(inoxId,debut,fin,excludeId=null){
   if(tireuseChezClient(inoxId))return false; // bloquée chez un client fixe
   for(const c of state.commandes){
     if(c.id===excludeId)continue;
+    if(c.archivee||c.retourFait)continue; // rendue ou archivée = tireuse libérée
     if(c.dateDebut<=fin&&(c.dateFin||"9999-12-31")>=debut){
       const found=cmdTireuses(c).some(x=>x.type==='inox'&&x.inoxId===inoxId);
       if(found)return false;
@@ -1063,7 +1097,7 @@ function stockTotal(type){return Object.values(state.stock[type]||{}).reduce((a,
 // ================================================================
 // TABS
 // ================================================================
-const TAB_MAP={dashboard:'Bord',commandes:'Commandes',planning:'Planning',timeline:'Timeline',clients:'Clients',tireuses:'Tireuses',fermenteurs:'Fermenteurs',futs:'Fûts',brassage:'Brassage',config:'Config'};
+const TAB_MAP={dashboard:'Bord',commandes:'Commandes',archives:'Archives',planning:'Planning',timeline:'Timeline',clients:'Clients',tireuses:'Tireuses',fermenteurs:'Fermenteurs',futs:'Fûts',brassage:'Brassage',tarifs:'Tarifs',config:'Config'};
 function showTab(name){
   document.querySelectorAll('.content').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
@@ -1071,7 +1105,7 @@ function showTab(name){
   document.querySelectorAll('.tab').forEach(t=>{if(t.textContent.includes(TAB_MAP[name]))t.classList.add('active');});
   const fab=document.getElementById('fab-btn');
   const fab2=document.getElementById('fab-btn2');
-  const noFab=['config','tireuses','fermenteurs','futs','brassage','timeline','ingredients'];
+  const noFab=['tarifs','config','tireuses','fermenteurs','futs','brassage','timeline','ingredients','archives'];
   // 2e bouton "Nouveau brassin" : uniquement sur le tableau de bord (côte à côte)
   const surDash=(name==='dashboard');
   if(fab2)fab2.style.display=surDash?'flex':'none';
@@ -1081,7 +1115,7 @@ function showTab(name){
   if(noFab.includes(name)){fab.style.display='none';}
   else if(name==='clients'){fab.style.display='flex';fab.innerHTML='＋ Nouveau client';fab.onclick=()=>openClientModal();}
   else{fab.style.display='flex';fab.innerHTML='＋ Nouvelle commande';fab.onclick=openCmdModal;}
-  const fn={dashboard:renderDashboard,commandes:renderCommandes,planning:renderPlanning,timeline:renderTimeline,clients:renderClients,tireuses:renderTireuses,fermenteurs:renderFermenteurs,futs:renderFuts,brassage:renderBrassage,config:renderConfig,ingredients:renderIngredients};
+  const fn={dashboard:renderDashboard,commandes:renderCommandes,archives:renderArchives,planning:renderPlanning,timeline:renderTimeline,clients:renderClients,tireuses:renderTireuses,fermenteurs:renderFermenteurs,futs:renderFuts,brassage:renderBrassage,config:renderConfig,ingredients:renderIngredients,tarifs:renderTarifs};
   fn[name]&&fn[name]();
 }
 
@@ -1125,7 +1159,7 @@ function renderDashboard(){
   }).join('');
 
   const in7=addD(ts,7);
-  const proches=state.commandes.filter(c=>c.dateDebut>=ts&&c.dateDebut<=in7).sort((a,b)=>a.dateDebut.localeCompare(b.dateDebut)).slice(0,5);
+  const proches=state.commandes.filter(c=>!c.archivee&&c.dateDebut>=ts&&c.dateDebut<=in7).sort((a,b)=>a.dateDebut.localeCompare(b.dateDebut)).slice(0,5);
   document.getElementById('dash-livraisons').innerHTML=proches.length
     ?proches.map(c=>`<div class="cmd-item"><div class="cmd-top"><div class="cmd-client">${c.client}</div><div class="cmd-date">${fmtDate(c.dateDebut)}</div></div>
       <div class="tags">${(c.bieres||[{biere:c.biere,nb:c.nbFuts}]).map(b=>`<span class="tag tag-fut">${biereTag(b)}</span>`).join('')}
@@ -1189,15 +1223,17 @@ function renderDashboard(){
 // ================================================================
 function renderCommandes(){
   const ts=todayStr();
-  const sorted=[...state.commandes].sort((a,b)=>a.dateDebut.localeCompare(b.dateDebut));
+  const sorted=[...state.commandes].filter(c=>!c.archivee).sort((a,b)=>a.dateDebut.localeCompare(b.dateDebut));
   document.getElementById('commandes-list').innerHTML=sorted.length?sorted.map(c=>{
     const past=c.dateFin&&c.dateFin<ts,active=c.dateDebut<=ts&&(c.dateFin||"9999-12-31")>=ts;
     const bc=past?'var(--border)':active?'var(--green-light)':'var(--amber)';
     const bieres=(c.bieres||[{biere:c.biere,nb:c.nbFuts}]);
     const retourFait=c.retourFait;
+    const aTireuses=cmdTireuses(c).length>0;
+    const estBouteilles=(c.type==='bouteilles')||!aTireuses;
     return `<div class="cmd-item" style="border-left-color:${bc}">
       <div class="cmd-top">
-        <div class="cmd-client">${c.client} ${retourFait?'<span style="color:#69F0AE;font-size:11px">✅ Rendu</span>':''}</div>
+        <div class="cmd-client">${c.client} ${estBouteilles?'<span style="color:var(--amber-light);font-size:11px">🍾 Livraison</span>':''} ${retourFait?'<span style="color:#69F0AE;font-size:11px">✅ Rendu</span>':''}</div>
         <div style="display:flex">
           <button class="icon-btn" onclick="partagerCommande(${c.id})" title="Partager">📤</button>
           <button class="icon-btn" onclick="dupliquerCommande(${c.id})" title="Dupliquer">📋</button>
@@ -1205,7 +1241,7 @@ function renderCommandes(){
           <button class="icon-btn" onclick="deleteCommande(${c.id})" title="Supprimer">🗑</button>
         </div>
       </div>
-      <div class="cmd-date">${fmtDate(c.dateDebut)} → ${c.dateFin?fmtDate(c.dateFin):'<span style="color:var(--amber-light)">retour ouvert</span>'} ${past&&!retourFait?'⏰':active?'🟢':''}</div>
+      <div class="cmd-date">${fmtDate(c.dateDebut)}${estBouteilles?'':` → ${c.dateFin?fmtDate(c.dateFin):'<span style="color:var(--amber-light)">retour ouvert</span>'}`} ${past&&!retourFait?'⏰':active?'🟢':''}</div>
       <div class="tags">
         ${bieres.map(b=>`<span class="tag tag-fut">${biereTag(b)}</span>`).join('')}
         ${cmdTireuses(c).map(t=>`<span class="tag tag-tireuse">${tirTag(t)}</span>`).join('')}
@@ -1213,15 +1249,70 @@ function renderCommandes(){
         ${retourFait?'<span class="tag tag-retour">📦 Retour OK</span>':''}
       </div>
       ${c.notes?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">📝 ${c.notes}</div>`:''}
-      ${!retourFait&&(past||active)?`<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openRetourModal(${c.id})">📦 Enregistrer le retour</button>`:''}
+      ${estBouteilles
+        ? `<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="archiverCommande(${c.id})">✅ Livrée — archiver</button>`
+        : `<div style="display:flex;gap:6px;margin-top:8px">
+             ${!retourFait?`<button class="btn btn-secondary btn-sm" style="flex:1" onclick="openRetourModal(${c.id})">📦 Enregistrer le retour</button>`:''}
+             <button class="btn ${retourFait?'btn-primary':'btn-secondary'} btn-sm" style="flex:1" onclick="archiverCommande(${c.id})">✅ Retour validé — archiver</button>
+           </div>`}
     </div>`;
   }).join(''):'<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucune commande — appuie sur +</div>';
+}
+
+// ===== ARCHIVES =====
+function archiverCommande(id){
+  const c=state.commandes.find(x=>x.id===id);if(!c)return;
+  const aTireuses=cmdTireuses(c).length>0;
+  const estBouteilles=(c.type==='bouteilles')||!aTireuses;
+  // Pour une location tireuses non encore rendue, on demande confirmation
+  // (archiver libère les tireuses même si le retour n'a pas été saisi en détail)
+  if(!estBouteilles && !c.retourFait){
+    if(!confirm('Le retour de cette commande n\'a pas été enregistré (fûts pleins/vides). Archiver quand même ? Les tireuses seront libérées.'))return;
+  }
+  state.commandes=state.commandes.map(x=>x.id===id?{...x,archivee:true,retourFait:true,dateArchivage:todayStr()}:x);
+  save();renderCommandes();renderArchives();renderDashboard();renderTireuses&&document.getElementById('tab-tireuses').classList.contains('active')&&renderTireuses();
+}
+
+function reactiverCommande(id){
+  if(!confirm('Remettre cette commande dans la liste active ?'))return;
+  state.commandes=state.commandes.map(x=>x.id===id?{...x,archivee:false}:x);
+  save();renderCommandes();renderArchives();renderDashboard();
+}
+
+function renderArchives(){
+  const q=(document.getElementById('archives-search')?.value||'').toLowerCase().trim();
+  let arch=state.commandes.filter(c=>c.archivee);
+  if(q)arch=arch.filter(c=>(c.client||'').toLowerCase().includes(q));
+  // Plus récentes archivées en premier
+  arch.sort((a,b)=>(b.dateArchivage||b.dateDebut||'').localeCompare(a.dateArchivage||a.dateDebut||''));
+  document.getElementById('archives-list').innerHTML=arch.length?arch.map(c=>{
+    const bieres=(c.bieres||[{biere:c.biere,nb:c.nbFuts}]);
+    const aTireuses=cmdTireuses(c).length>0;
+    const estBouteilles=(c.type==='bouteilles')||!aTireuses;
+    return `<div class="cmd-item" style="border-left-color:var(--border);opacity:.92">
+      <div class="cmd-top">
+        <div class="cmd-client">${c.client} ${estBouteilles?'<span style="color:var(--amber-light);font-size:11px">🍾 Livraison</span>':'<span style="color:#69F0AE;font-size:11px">✅ Rendu</span>'}</div>
+        <div style="display:flex">
+          <button class="icon-btn" onclick="partagerCommande(${c.id})" title="Partager">📤</button>
+          <button class="icon-btn" onclick="reactiverCommande(${c.id})" title="Réactiver">♻️</button>
+          <button class="icon-btn" onclick="deleteCommande(${c.id})" title="Supprimer">🗑</button>
+        </div>
+      </div>
+      <div class="cmd-date">${fmtDate(c.dateDebut)}${estBouteilles?'':` → ${c.dateFin?fmtDate(c.dateFin):'ouverte'}`} ${c.dateArchivage?`· 📦 archivée le ${fmtDate(c.dateArchivage)}`:''}</div>
+      <div class="tags">
+        ${bieres.map(b=>`<span class="tag tag-fut">${biereTag(b)}</span>`).join('')}
+        ${cmdTireuses(c).map(t=>`<span class="tag tag-tireuse">${tirTag(t)}</span>`).join('')}
+        <span class="tag tag-liv">${c.livraison==='livraison'?'🚚':'🏪'}</span>
+      </div>
+      ${c.notes?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">📝 ${c.notes}</div>`:''}
+    </div>`;
+  }).join(''):'<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:24px">Aucune commande archivée</div>';
 }
 
 function deleteCommande(id){
   if(!confirm('Supprimer cette commande ?'))return;
   state.commandes=state.commandes.filter(c=>c.id!==id);
-  save();renderCommandes();renderDashboard();
+  save();renderCommandes();renderArchives();renderDashboard();
 }
 
 // ===== PARTAGE D'UNE COMMANDE (texte SMS/email + PDF) =====
@@ -1372,6 +1463,8 @@ function editCommande(id){
   bieres.forEach(b=>addBiereLigne(b.biere,b.nb,b.format||'10L'));
   document.getElementById('tireuses-lignes').innerHTML='';
   cmdTireuses(c).forEach(t=>addTireuseLigne(t.type||null,1,t.tirId||t.inoxId||null));
+  document.getElementById('cmd-type').value=c.type||(cmdTireuses(c).length?'tireuses':'bouteilles');
+  applyCmdType();
   document.getElementById('modal-cmd').classList.add('open');
 }
 
@@ -1396,6 +1489,8 @@ function dupliquerCommande(id){
   bieres.forEach(b=>addBiereLigne(b.biere,b.nb,b.format||'10L'));
   document.getElementById('tireuses-lignes').innerHTML='';
   cmdTireuses(c).forEach(t=>addTireuseLigne(t.type||null,1,t.tirId||t.inoxId||null));
+  document.getElementById('cmd-type').value=c.type||(cmdTireuses(c).length?'tireuses':'bouteilles');
+  applyCmdType();
   document.getElementById('modal-cmd').classList.add('open');
 }
 
@@ -1451,10 +1546,10 @@ function saveRetour(){
     if(vide>0) state.futsVides[format]=(state.futsVides[format]||0)+vide;
   }
 
-  // Marquer commande comme rendue
-  state.commandes=state.commandes.map(x=>x.id===id?{...x,retourFait:true}:x);
-  save();closeModal('modal-retour');renderCommandes();renderDashboard();
-  alert('✅ Retour enregistré ! Le stock a été mis à jour.');
+  // Marquer commande comme rendue + proposer l'archivage
+  const archiver=confirm('✅ Retour enregistré ! Le stock a été mis à jour.\n\nArchiver cette commande maintenant ? (elle passera dans l\'onglet 📦 Archives)');
+  state.commandes=state.commandes.map(x=>x.id===id?{...x,retourFait:true,archivee:archiver?true:(x.archivee||false),dateArchivage:archiver?todayStr():x.dateArchivage}:x);
+  save();closeModal('modal-retour');renderCommandes();renderArchives();renderDashboard();
 }
 
 // ================================================================
@@ -1468,12 +1563,12 @@ function renderPlanning(){
   let html='';
   for(let i=0;i<7;i++){
     const ds=addD(ws,i);
-    const hasCmd=state.commandes.some(c=>c.dateDebut<=ds&&(c.dateFin||"9999-12-31")>=ds);
+    const hasCmd=state.commandes.some(c=>!c.archivee&&c.dateDebut<=ds&&(c.dateFin||"9999-12-31")>=ds);
     html+=`<div class="week-day"><div class="wdn">${DAYS[i]}</div>
       <div class="wdd${ds===ts?' today':ds===selDay?' selected':''}${hasCmd?' has-event':''}" onclick="selDay='${ds}';renderPlanning()">${parseInt(ds.split('-')[2])}</div></div>`;
   }
   document.getElementById('week-grid').innerHTML=html;
-  const cmds=state.commandes.filter(c=>c.dateDebut<=selDay&&(c.dateFin||"9999-12-31")>=selDay);
+  const cmds=state.commandes.filter(c=>!c.archivee&&c.dateDebut<=selDay&&(c.dateFin||"9999-12-31")>=selDay);
   const d10=tirDispo('10L',selDay,selDay),d3=tirDispo('3L',selDay,selDay),din=tirDispo('inox',selDay,selDay);
   let det=`<div class="card"><div class="card-title">📅 ${selDay===ts?"Aujourd'hui":fmtDate(selDay)}</div>
     <div class="alert alert-${d10<5?'orange':'green'}" style="font-size:12px">🚰 10L: <b>${d10}</b> libres | 3L: <b>${d3}</b> | Inox: <b>${din}</b></div>`;
@@ -3606,9 +3701,20 @@ function refreshSelects(){
 // ================================================================
 // MODAL COMMANDE MULTI-BIERES
 // ================================================================
+// Adapte le formulaire selon le type de commande (tireuses vs livraison bouteilles)
+function applyCmdType(){
+  const type=document.getElementById('cmd-type').value;
+  const bouteilles=(type==='bouteilles');
+  // Livraison bouteilles/fûts sans tireuse : pas de tireuse, pas de date de retour
+  document.getElementById('cmd-tireuses-group').style.display=bouteilles?'none':'';
+  document.getElementById('cmd-fin-group').style.display=bouteilles?'none':'';
+  if(bouteilles){document.getElementById('tireuses-lignes').innerHTML='';document.getElementById('cmd-fin').value='';}
+}
+
 function openCmdModal(){
   document.getElementById('modal-cmd-title').textContent='Nouvelle commande';
   document.getElementById('cmd-edit-id').value='';
+  document.getElementById('cmd-type').value='tireuses';
   document.getElementById('cmd-client').value='';
   document.getElementById('cmd-debut').value=todayStr();
   document.getElementById('cmd-fin').value=addD(todayStr(),3);
@@ -3623,6 +3729,7 @@ function openCmdModal(){
   sel.value='';
   addBiereLigne();
   addTireuseLigne();
+  applyCmdType();
   document.getElementById('modal-cmd').classList.add('open');
 }
 
@@ -3746,13 +3853,15 @@ function getTireusesLignes(){
 
 function saveCommande(){
   const client=document.getElementById('cmd-client').value.trim();
+  const type=document.getElementById('cmd-type').value;
   const dateDebut=document.getElementById('cmd-debut').value;
-  const dateFin=document.getElementById('cmd-fin').value;
+  // Livraison bouteilles/fûts sans tireuse : ni tireuse, ni date de retour
+  const dateFin=(type==='bouteilles')?'':document.getElementById('cmd-fin').value;
   const livraison=document.getElementById('cmd-livraison').value;
   const notes=document.getElementById('cmd-notes').value;
   const eid=document.getElementById('cmd-edit-id').value;
   const bieres=getBieresLignes();
-  const tireuses=getTireusesLignes();
+  const tireuses=(type==='bouteilles')?[]:getTireusesLignes();
 
   if(!client||!dateDebut){document.getElementById('cmd-alerte').innerHTML='<div class="alert alert-red">⚠️ Client et date de début obligatoires</div>';return;}
   if(dateFin&&dateFin<dateDebut){document.getElementById('cmd-alerte').innerHTML='<div class="alert alert-red">⚠️ Date retour avant date début</div>';return;}
@@ -3777,6 +3886,7 @@ function saveCommande(){
     const finEff=dateFin||'9999-12-31'; // location ouverte = fin lointaine
     for(const c of state.commandes){
       if(c.id===eidNum)continue;
+      if(c.archivee||c.retourFait)continue; // rendue ou archivée = tireuse libérée
       const cFin=c.dateFin||'9999-12-31';
       if(c.dateDebut<=finEff&&cFin>=dateDebut){
         if(cmdTireuses(c).some(x=>x.tirId===t.tirId))occupee=true;
@@ -3806,7 +3916,9 @@ function saveCommande(){
   }
   document.getElementById('cmd-alerte').dataset.confirmed='';
 
-  const obj={id:eid?parseInt(eid):state.nextId++,client,dateDebut,dateFin,tireuses,bieres,livraison,notes,retourFait:false};
+  const obj={id:eid?parseInt(eid):state.nextId++,client,type,dateDebut,dateFin,tireuses,bieres,livraison,notes,retourFait:false,archivee:false};
+  // Conserver l'état d'archivage si on édite une commande déjà archivée
+  if(eid){const anc=state.commandes.find(c=>c.id===parseInt(eid));if(anc){obj.archivee=anc.archivee||false;obj.retourFait=anc.retourFait||false;obj.dateArchivage=anc.dateArchivage;}}
   // Historique : journaliser l'usage des tireuses (nouvelle commande seulement)
   if(!eid){
     tireuses.forEach(t=>{if(t.tirId)ajoutHistorique(t.tirId,`🍺 Commande ${client} (${fmtDate(dateDebut)}→${dateFin?fmtDate(dateFin):'ouverte'})`);});
@@ -3919,6 +4031,130 @@ autoSyncOnStart().then(()=>{
   envoyerNotifsPush();
 });
 
+
+// ================================================================
+// TARIFS FOURNISSEURS (données issues des factures, prix HT)
+// ================================================================
+const TARIFS={"version": "2026-09-27", "fournisseurs": [{"id": "antargaz", "nom": "Antargaz", "codeClient": "70520205", "paiement": "Prélèvement"}, {"id": "airliquide", "nom": "Air Liquide France Industrie", "codeClient": "0013719749", "paiement": "Prélèvement SEPA 30 j"}, {"id": "temaco", "nom": "Temaco", "codeClient": "C030166", "paiement": "Virement 30 j net"}, {"id": "sogebul", "nom": "Sogebul Poligny", "codeClient": "C0004197", "paiement": "Virement comptant"}], "produits": [{"fournisseur": "antargaz", "ref": "935", "designation": "Propane 35 kg", "categorie": "gaz", "conditionnement": "bouteille 35 kg", "unitePrix": "bouteille", "prixBrutHT": 120.63, "remise": 43.73, "prixUnitaireHT": 76.9, "prixConditionnementHT": 76.9, "tva": 20, "dateTarif": "2026-06-30", "facture": "5364211"}, {"fournisseur": "antargaz", "ref": "TICPE", "designation": "TICPE autres usages (taxe propane)", "categorie": "taxe", "conditionnement": "par bouteille livrée", "unitePrix": "bouteille", "prixUnitaireHT": 2.67, "prixConditionnementHT": 2.67, "tva": 20, "dateTarif": "2026-06-30", "facture": "5364211"}, {"fournisseur": "antargaz", "ref": "MAINT", "designation": "Forfait maintenance bouteilles", "categorie": "service", "conditionnement": "forfait par livraison", "unitePrix": "forfait", "prixUnitaireHT": 8.95, "prixConditionnementHT": 8.95, "tva": 20, "dateTarif": "2026-06-30", "facture": "5364211"}, {"fournisseur": "airliquide", "ref": "I5110L50R0A001", "designation": "ALIGAL 2 (CO2) bouteille 50 L", "categorie": "gaz", "conditionnement": "bouteille 50 L", "unitePrix": "bouteille", "prixUnitaireHT": 81.58, "prixConditionnementHT": 81.58, "tva": 20, "dateTarif": "2026-07-31", "facture": "5801583206"}, {"fournisseur": "airliquide", "ref": "I5110M14R0A001", "designation": "ALIGAL 2 (CO2) bouteille 14 L", "categorie": "gaz", "conditionnement": "bouteille 14 L", "unitePrix": "bouteille", "prixUnitaireHT": 36.06, "prixConditionnementHT": 36.06, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447", "historique": [{"date": "2026-05-31", "prix": 34.96}]}, {"fournisseur": "airliquide", "ref": "RR0A106", "designation": "Location bouteille gamme CLASSIC", "categorie": "location", "conditionnement": "par bouteille / mois", "unitePrix": "bouteille", "prixBrutHT": 16.67, "remisePct": 53.4, "prixUnitaireHT": 7.77, "prixConditionnementHT": 7.77, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447", "historique": [{"date": "2025-12-31", "prix": 7.4}]}, {"fournisseur": "airliquide", "ref": "S1439", "designation": "PRE fixe bouteille Réglementations-Environnement", "categorie": "service", "conditionnement": "par livraison", "unitePrix": "pièce", "prixBrutHT": 21.97, "remisePct": 45.6, "prixUnitaireHT": 11.95, "prixConditionnementHT": 11.95, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447", "historique": [{"date": "2025-10-31", "prix": 11.38}]}, {"fournisseur": "airliquide", "ref": "RI0A106", "designation": "Immobilisation bouteille gamme CLASSIC", "categorie": "service", "conditionnement": "par bouteille", "unitePrix": "bouteille", "prixBrutHT": 16.1, "remisePct": 100, "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-04-30", "facture": "5801388054"}, {"fournisseur": "airliquide", "ref": "S1553", "designation": "Service accès distributeur", "categorie": "service", "conditionnement": "pièce", "unitePrix": "pièce", "prixBrutHT": 22.18, "remisePct": 100, "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447"}, {"fournisseur": "airliquide", "ref": "S5104", "designation": "Servitrax gestion des emballages", "categorie": "service", "conditionnement": "pièce", "unitePrix": "pièce", "prixBrutHT": 0.62, "remisePct": 100, "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-08-31", "facture": "5801658447"}, {"fournisseur": "temaco", "ref": "027119", "designation": "Bouteille bière 33 cl LN couronne 26 ébène NM", "categorie": "emballage", "conditionnement": "palette 2 888 u", "unitePrix": "bouteille", "prixMilleHT": 142.32, "prixUnitaireHT": 0.14232, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "027200", "designation": "Bouteille bière 75 cl bras couronne 26 ébène", "categorie": "emballage", "conditionnement": "palette 1 218 u", "unitePrix": "bouteille", "prixMilleHT": 378.81, "prixUnitaireHT": 0.37881, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "027383B", "designation": "Bouteille limonade 25 cl B méca", "categorie": "emballage", "conditionnement": "pack de 12", "unitePrix": "bouteille", "prixMilleHT": 558.75, "prixUnitaireHT": 0.55875, "tva": 20, "dateTarif": "2026-05-13", "facture": "FCL2605TCOF00427"}, {"fournisseur": "temaco", "ref": "111419_2", "designation": "Carton bière 33 cl x12 poignées (prédécoupé, 248x186x230)", "categorie": "emballage", "conditionnement": "paquet de 25", "unitePrix": "carton", "prixMilleHT": 389.56, "prixUnitaireHT": 0.38956, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "111420_2", "designation": "Carton bière 75 cl x6 poignées (prédécoupé, 244x163x293)", "categorie": "emballage", "conditionnement": "paquet de 25", "unitePrix": "carton", "prixMilleHT": 359.76, "prixUnitaireHT": 0.35976, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "131003", "designation": "Palette 100x120 vendue (consigne)", "categorie": "consigne", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 14.5, "prixConditionnementHT": 14.5, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "131000", "designation": "Palette Europe 80x120", "categorie": "consigne", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 14.5, "prixConditionnementHT": 14.5, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "136003", "designation": "Plaque intercalaire plastique (consigne)", "categorie": "consigne", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 2.94, "prixConditionnementHT": 2.94, "tva": 20, "dateTarif": "2026-07-17", "facture": "FCL2607TCOF00585"}, {"fournisseur": "temaco", "ref": "131006", "designation": "Palette 100x120 reprise (avoir)", "categorie": "reprise", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": -9.0, "prixConditionnementHT": -9.0, "tva": 20, "dateTarif": "2026-06-26", "facture": "ACL2606TCOF00205"}, {"fournisseur": "temaco", "ref": "136005", "designation": "Plaque plastique reprise (avoir)", "categorie": "reprise", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": -2.74, "prixConditionnementHT": -2.74, "tva": 20, "dateTarif": "2026-06-26", "facture": "ACL2606TCOF00205"}, {"fournisseur": "temaco", "ref": "PORT", "designation": "Frais de port (petite commande)", "categorie": "transport", "conditionnement": "forfait", "unitePrix": "forfait", "prixUnitaireHT": 71.0, "prixConditionnementHT": 71.0, "tva": 20, "dateTarif": "2026-05-13", "facture": "FCL2605TCOF00427", "note": "Pas de port facturé sur la commande palette du 17/07/2026"}, {"fournisseur": "sogebul", "ref": "LEVURE_NEWE_500G", "designation": "Levure Fermoale New-E", "categorie": "matiere_premiere", "conditionnement": "sachet 500 g", "unitePrix": "kg", "prixUnitaireHT": 154.0, "prixConditionnementHT": 77.0, "tva": 5.5, "dateTarif": "2026-07-29", "facture": "240486", "historique": [{"date": "2025-11-04", "prix": 160.0}]}, {"fournisseur": "sogebul", "ref": "LEVURE_ROCK_500G", "designation": "Levure Rock Ale fraîcheur", "categorie": "matiere_premiere", "conditionnement": "sachet 500 g", "unitePrix": "kg", "prixUnitaireHT": 101.5, "prixConditionnementHT": 50.75, "tva": 5.5, "dateTarif": "2026-07-29", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "LEVURE_BELABBEY_500G", "designation": "Levure Fermoale Bel-Abbey", "categorie": "matiere_premiere", "conditionnement": "sachet 500 g", "unitePrix": "kg", "prixUnitaireHT": 111.9, "prixConditionnementHT": 55.95, "tva": 5.5, "dateTarif": "2026-07-02", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "SUCREBIO_BLOND_25KG", "designation": "Sucre de canne bio blond", "categorie": "matiere_premiere", "conditionnement": "sac 25 kg", "unitePrix": "kg", "prixUnitaireHT": 1.99, "prixConditionnementHT": 49.75, "tva": 5.5, "dateTarif": "2026-07-29", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "ALGUEBIO_CHONCRIS_5KG", "designation": "Algue bio Chondrus crispus flocon 2-4 mm", "categorie": "matiere_premiere", "conditionnement": "sac 5 kg", "unitePrix": "kg", "prixUnitaireHT": 17.45, "prixConditionnementHT": 87.25, "tva": 5.5, "dateTarif": "2025-07-28", "facture": "213438"}, {"fournisseur": "sogebul", "ref": "CALFLUID_ROUGE_JER20KG", "designation": "Fluide caloporteur concentré rouge (glycol)", "categorie": "technique", "conditionnement": "jerrican 20 kg", "unitePrix": "kg", "prixUnitaireHT": 5.2, "prixConditionnementHT": 104.0, "tva": 20, "dateTarif": "2026-07-02", "facture": "240486", "historique": [{"date": "2025-07-03", "prix": 4.16}]}, {"fournisseur": "sogebul", "ref": "ETHAPLUS_BID_5L", "designation": "Ethaplus", "categorie": "nettoyage", "conditionnement": "bidon 5 L", "unitePrix": "L", "prixUnitaireHT": 5.28, "prixConditionnementHT": 26.4, "tva": 20, "dateTarif": "2026-07-29", "facture": "240486", "historique": [{"date": "2025-11-04", "prix": 5.18}], "note": "Surcharge fabricant matières premières de 1,31 € HT sur la facture 240486 (3 bidons)"}, {"fournisseur": "sogebul", "ref": "XACIDLY_JER_20KG", "designation": "X-Acid LY", "categorie": "nettoyage", "conditionnement": "jerrican 20 kg", "unitePrix": "kg", "prixUnitaireHT": 2.7, "prixConditionnementHT": 54.0, "tva": 20, "dateTarif": "2026-07-29", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "ADDINGOX_BID_10KG", "designation": "Adding OX", "categorie": "nettoyage", "conditionnement": "bidon 10 kg", "unitePrix": "kg", "prixUnitaireHT": 4.3, "prixConditionnementHT": 43.0, "tva": 20, "dateTarif": "2026-07-29", "facture": "240486", "historique": [{"date": "2025-11-04", "prix": 4.8}]}, {"fournisseur": "sogebul", "ref": "REMOVILLIQ_JER_25KG", "designation": "Removil Liquid", "categorie": "nettoyage", "conditionnement": "jerrican 25 kg", "unitePrix": "kg", "prixUnitaireHT": 2.8, "prixConditionnementHT": 70.0, "tva": 20, "dateTarif": "2026-07-02", "facture": "240486"}, {"fournisseur": "sogebul", "ref": "BRILLEINOX", "designation": "Suma Brille Inox D7.2", "categorie": "nettoyage", "conditionnement": "flacon 750 ml", "unitePrix": "flacon", "prixUnitaireHT": 17.99, "prixConditionnementHT": 17.99, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "DUOTOUCH_1L", "designation": "Duotouch savon", "categorie": "hygiene", "conditionnement": "flacon 1 L", "unitePrix": "flacon", "prixUnitaireHT": 6.28, "prixConditionnementHT": 6.28, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "DISTRISAVON1", "designation": "Distributeur savon airless inox", "categorie": "hygiene", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 9.9, "prixConditionnementHT": 9.9, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "BOUCHONOREIL_CORD/LAV_PAI", "designation": "Bouchons d'oreille réutilisables avec cordelette", "categorie": "epi", "conditionnement": "paire (boîte de 50)", "unitePrix": "paire", "prixUnitaireHT": 2.59, "prixConditionnementHT": 2.59, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "ULTRANEO_450NOIR_M", "designation": "Gants néoprène/latex 450 noir T8 (M) 41 cm", "categorie": "epi", "conditionnement": "paire", "unitePrix": "paire", "prixUnitaireHT": 8.68, "prixConditionnementHT": 8.68, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "FILMALIM_30CM", "designation": "Film alimentaire 7 µ, 30 cm x 300 m", "categorie": "consommable", "conditionnement": "rouleau", "unitePrix": "rouleau", "prixUnitaireHT": 11.29, "prixConditionnementHT": 11.29, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "EPROUVETTE_250ML", "designation": "Éprouvette graduée plastique 250 ml", "categorie": "laboratoire", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 16.4, "prixConditionnementHT": 16.4, "tva": 20, "dateTarif": "2026-05-04", "facture": "234636"}, {"fournisseur": "sogebul", "ref": "REPRISE_JER", "designation": "Reprise emballage vide jerrican 20 L", "categorie": "reprise", "conditionnement": "pièce", "unitePrix": "pièce", "prixUnitaireHT": 0.0, "prixConditionnementHT": 0.0, "tva": 20, "dateTarif": "2026-07-02", "facture": "240486"}]};
+const TARIF_CATS={matiere_premiere:'🌾 Matières premières',emballage:'🍾 Emballages',gaz:'🔥 Gaz',nettoyage:'🧽 Nettoyage',technique:'❄️ Technique',hygiene:'🧼 Hygiène',epi:'🦺 EPI',consommable:'📦 Consommables',laboratoire:'🔬 Labo',consigne:'🔁 Consignes',reprise:'↩️ Reprises / avoirs',location:'📅 Location',service:'🛠️ Services',transport:'🚚 Transport',taxe:'🏛️ Taxes'};
+let tarifFiltre={q:'',f:'',c:''};
+function fmtEur(v){const d=Math.abs(v)>0&&Math.abs(v)<1?4:2;return v.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:d})+' €';}
+function fmtDateFr(iso){const [y,m,d]=iso.split('-');return `${d}/${m}/${y}`;}
+
+// ===== LOGISTIQUE : stock + à recommander (clé "fournisseur|ref") =====
+function prodKey(p){return p.fournisseur+'|'+p.ref;}
+function getStockLog(p){const k=prodKey(p);if(!state.stockLog[k])state.stockLog[k]={stock:0,recommander:false};return state.stockLog[k];}
+function ajusterStock(fournisseur,ref,delta){
+  const k=fournisseur+'|'+ref;if(!state.stockLog[k])state.stockLog[k]={stock:0,recommander:false};
+  state.stockLog[k].stock=Math.round(((state.stockLog[k].stock||0)+delta)*1000)/1000;
+  save();renderTarifsListe();
+}
+function setStock(fournisseur,ref,val){
+  const k=fournisseur+'|'+ref;if(!state.stockLog[k])state.stockLog[k]={stock:0,recommander:false};
+  const n=parseFloat(String(val).replace(',','.'));state.stockLog[k].stock=isNaN(n)?0:n;
+  save();renderTarifsListe();
+}
+function toggleRecommander(fournisseur,ref){
+  const k=fournisseur+'|'+ref;if(!state.stockLog[k])state.stockLog[k]={stock:0,recommander:false};
+  state.stockLog[k].recommander=!state.stockLog[k].recommander;
+  save();renderTarifsListe();
+}
+function copierListeReappro(){
+  const lignes=[];
+  TARIFS.fournisseurs.forEach(f=>{
+    const items=TARIFS.produits.filter(p=>p.fournisseur===f.id&&(state.stockLog[prodKey(p)]||{}).recommander);
+    if(!items.length)return;
+    lignes.push(`— ${f.nom} (client ${f.codeClient}) —`);
+    items.forEach(p=>{const s=getStockLog(p);lignes.push(`• ${p.designation} (${p.ref}) · ${p.conditionnement} · reste ${s.stock} ${p.unitePrix}`);});
+    lignes.push('');
+  });
+  const txt=lignes.join('\n').trim()||'Aucun article à recommander.';
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>alert('🛒 Liste copiée !\n\n'+txt),()=>alert(txt));
+  }else alert(txt);
+}
+function renderTarifs(){
+  const fs=document.getElementById('tarif-f'),cs=document.getElementById('tarif-c');
+  if(!fs.options.length){
+    fs.innerHTML='<option value="">Tous fournisseurs</option>'+TARIFS.fournisseurs.map(f=>`<option value="${f.id}">${f.nom}</option>`).join('');
+    const cats=[...new Set(TARIFS.produits.map(p=>p.categorie))];
+    cs.innerHTML='<option value="">Toutes catégories</option>'+cats.map(c=>`<option value="${c}">${TARIF_CATS[c]||c}</option>`).join('');
+  }
+  renderTarifsListe();
+}
+function renderTarifsListe(){
+  const q=tarifFiltre.q.trim().toLowerCase();
+  const liste=TARIFS.produits.filter(p=>(!tarifFiltre.f||p.fournisseur===tarifFiltre.f)&&(!tarifFiltre.c||p.categorie===tarifFiltre.c)
+    &&(!q||(p.designation+' '+p.ref+' '+p.conditionnement).toLowerCase().includes(q)));
+  document.getElementById('tarif-info').textContent=`${liste.length} produit(s) · prix HT · tarifs relevés sur factures (MAJ ${fmtDateFr(TARIFS.version)})`;
+  let html='';
+  // Bloc "À recommander" (tous fournisseurs, non filtré)
+  const aRecommander=TARIFS.produits.filter(p=>(state.stockLog[prodKey(p)]||{}).recommander);
+  if(aRecommander.length){
+    html+=`<div class="card" style="border:1px solid var(--amber);background:var(--dark2)">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>🛒 À recommander (${aRecommander.length})</span>
+        <button class="btn btn-secondary btn-sm" onclick="copierListeReappro()">📋 Copier la liste</button>
+      </div>`;
+    TARIFS.fournisseurs.forEach(f=>{
+      const items=aRecommander.filter(p=>p.fournisseur===f.id);
+      if(!items.length)return;
+      html+=`<div style="font-size:12px;font-weight:700;color:var(--amber-light);margin:8px 0 4px">${f.nom}</div>`;
+      html+=items.map(p=>{const s=getStockLog(p);return `<div class="row" style="padding:5px 0;font-size:12px">
+        <div style="flex:1;min-width:0"><div class="row-name" style="font-size:12px">${p.designation}</div>
+        <div style="font-size:10px;color:var(--text-muted)">${p.ref} · reste ${s.stock} ${p.unitePrix}</div></div>
+        <button class="icon-btn" title="Retirer de la liste" onclick="toggleRecommander('${p.fournisseur}','${p.ref.replace(/'/g,"\\'")}')">✕</button>
+      </div>`;}).join('');
+    });
+    html+='</div>';
+  }
+  TARIFS.fournisseurs.forEach(f=>{
+    const items=liste.filter(p=>p.fournisseur===f.id);
+    if(!items.length)return;
+    html+=`<div class="card"><div class="card-title">${f.nom} <span style="font-family:Inter,sans-serif;font-size:11px;color:var(--text-muted);letter-spacing:0">· client ${f.codeClient} · ${f.paiement}</span></div>`;
+    html+=items.map(p=>{
+      const ttc=p.prixUnitaireHT*(1+p.tva/100);
+      let tendance='';
+      if(p.historique&&p.historique.length){
+        const anc=p.historique[p.historique.length-1].prix, diff=(p.prixUnitaireHT-anc)/anc*100;
+        const up=diff>0;
+        tendance=`<span title="Avant : ${fmtEur(anc)} (${fmtDateFr(p.historique[p.historique.length-1].date)})" style="font-size:11px;font-weight:700;color:${up?'var(--red-light)':'var(--green-light)'}"> ${up?'▲':'▼'} ${up?'+':''}${diff.toFixed(1).replace('.',',')} %</span>`;
+      }
+      const cond=(p.prixConditionnementHT!==undefined&&p.prixConditionnementHT!==p.prixUnitaireHT)?` · ${fmtEur(p.prixConditionnementHT)} le ${p.conditionnement.split(' ')[0]}`:'';
+      const mille=p.prixMilleHT?` · ${fmtEur(p.prixMilleHT)} les 1000`:'';
+      const remise=p.remisePct?` · remise ${String(p.remisePct).replace('.',',')} % (brut ${fmtEur(p.prixBrutHT)})`:(p.remise?` · remise ${fmtEur(p.remise)} (brut ${fmtEur(p.prixBrutHT)})`:'');
+      const tvaBadge=`<span class="badge ${p.tva<20?'badge-ok':'badge-warn'}" style="font-size:10px;padding:2px 7px">TVA ${String(p.tva).replace('.',',')} %</span>`;
+      const s=getStockLog(p);
+      const reco=s.recommander;
+      const refEsc=p.ref.replace(/'/g,"\\'");
+      const barreStock=`<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text-muted)">📦 Stock :</span>
+        <button class="icon-btn" style="width:26px;height:26px;padding:0" onclick="ajusterStock('${p.fournisseur}','${refEsc}',-1)">−</button>
+        <input type="number" step="any" value="${s.stock}" onchange="setStock('${p.fournisseur}','${refEsc}',this.value)" style="width:56px;text-align:center;font-size:13px;padding:4px;background:var(--dark);color:var(--foam);border:1px solid var(--border);border-radius:6px">
+        <button class="icon-btn" style="width:26px;height:26px;padding:0" onclick="ajusterStock('${p.fournisseur}','${refEsc}',1)">＋</button>
+        <span style="font-size:10px;color:var(--text-muted)">${p.unitePrix}</span>
+        <button class="btn ${reco?'btn-primary':'btn-secondary'} btn-sm" style="margin-left:auto;padding:4px 10px;font-size:11px" onclick="toggleRecommander('${p.fournisseur}','${refEsc}')">${reco?'🛒 Dans la liste ✓':'🛒 À recommander'}</button>
+      </div>`;
+      return `<div class="row" style="flex-direction:column;align-items:stretch;gap:0;padding:9px 0">
+       <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div class="row-name" style="font-size:13px">${p.designation}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.ref} · ${p.conditionnement}${cond}${mille}${remise}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Facture ${p.facture} du ${fmtDateFr(p.dateTarif)}${p.note?' · ⚠️ '+p.note:''}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          <div style="font-size:14px;font-weight:700;color:var(--amber-light)">${fmtEur(p.prixUnitaireHT)}<span style="font-size:10px;color:var(--text-muted);font-weight:400"> HT/${p.unitePrix}</span></div>
+          <div style="font-size:11px;color:var(--text-muted)">${fmtEur(ttc)} TTC${tendance}</div>
+          <div style="margin-top:3px">${tvaBadge}</div>
+        </div>
+       </div>
+       ${barreStock}
+      </div>`;
+    }).join('');
+    html+='</div>';
+  });
+  document.getElementById('tarifs-content').innerHTML=html||'<div class="card" style="color:var(--text-muted);font-size:13px">Aucun produit ne correspond.</div>';
+}
 </script>
 </body>
 </html>
