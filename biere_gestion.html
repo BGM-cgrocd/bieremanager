@@ -1228,7 +1228,7 @@ function deleteCommande(id){
 function texteCommande(c){
   const bieres=(c.bieres||[{biere:c.biere,nb:c.nbFuts}]);
   const tirs=cmdTireuses(c);
-  let txt=`Cher client,\n\nVotre commande HORN Beer :\n`;
+  let txt=`Cher client,\n\nVotre commande HORN Beer a bien été prise en compte.\n`;
   txt+=`\nDu ${fmtDateLong(c.dateDebut)}`;
   txt+=c.dateFin?` au ${fmtDateLong(c.dateFin)}\n`:` (retour ouvert)\n`;
   txt+=`\nBières :\n`;
@@ -1239,7 +1239,7 @@ function texteCommande(c){
   }
   txt+=`\n${c.livraison==='livraison'?'🚚 Livraison':'🏪 Retrait sur place'}\n`;
   if(c.notes)txt+=`\n📝 ${c.notes}\n`;
-  txt+=`\nLa Brasserie des Gorges de la Méouge vous remercie de votre commande.`;
+  txt+=`\nLa Brasserie des Gorges de la Méouge vous remercie pour cette commande.`;
   return txt;
 }
 // Bière pour le texte client : "2 fûts de 30L de La N"
